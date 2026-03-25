@@ -1,0 +1,15 @@
+app/properties/add/page.tsx(147,23): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(165,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(167,41): error TS7006: Parameter '_' implicitly has an 'any' type.
+app/properties/add/page.tsx(167,44): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/properties/add/page.tsx(175,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(184,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(186,43): error TS7006: Parameter 'h' implicitly has an 'any' type.
+app/properties/add/page.tsx(193,19): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(202,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(204,41): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/properties/add/page.tsx(210,17): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/properties/add/page.tsx(998,44): error TS7006: Parameter 'h' implicitly has an 'any' type.
+app/properties/add/page.tsx(998,47): error TS7006: Parameter 'i' implicitly has an 'any' type.
+app/properties/add/page.tsx(1045,43): error TS7006: Parameter 'amenity' implicitly has an 'any' type.
+app/properties/add/page.tsx(1045,52): error TS7006: Parameter 'i' implicitly has an 'any' type.
