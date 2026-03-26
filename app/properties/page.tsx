@@ -8,8 +8,10 @@ import {
   CheckCircle2, AlertCircle,
   BarChart3, PieChart as PieChartIcon,
   ChevronRight, Phone, Clock, Filter, SlidersHorizontal,
-  Home, Building, Activity, Settings, LogOut
+  Home, Building, Activity, Settings, LogOut, Layers
 } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
+
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -39,6 +41,7 @@ export default function PropertiesPage() {
 
   // Properties state
   const [properties, setProperties] = useState<Property[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,21 +59,28 @@ export default function PropertiesPage() {
     { label: 'Above 2 Crore', min: 20000000, max: Infinity },
   ];
 
-  // Load properties
+  // Load properties and categories
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch('/api/properties');
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Failed to load properties');
+        const [propRes, catRes] = await Promise.all([
+          fetch('/api/properties'),
+          fetch('/api/categories?status=active')
+        ]);
+        
+        const propData = await propRes.json();
+        const catData = await catRes.json();
+
+        if (!propRes.ok) {
+          setError(propData.error || 'Failed to load properties');
         } else if (mounted) {
-          setProperties(data.properties || []);
+          setProperties(propData.properties || []);
+          setCategories(catData.categories || []);
         }
       } catch (err) {
         console.error(err);
-        setError('Failed to load properties');
+        setError('Failed to load data');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -86,8 +96,16 @@ export default function PropertiesPage() {
       const localityMatches = p.locality ? p.locality.toLowerCase().includes(searchLower) : false;
       const cityMatches = p.city ? p.city.toLowerCase().includes(searchLower) : false;
 
-      const matchesSearch = titleMatches || localityMatches || cityMatches;
-      const matchesCategory = categoryFilter === 'All' || p.category === (categoryFilter as any);
+      const categoryLower = p.category ? String(p.category).toLowerCase() : '';
+      const filterLower = categoryFilter.toLowerCase();
+      const selectedCat = categories.find(cat => String(cat.name).toLowerCase() === filterLower || String(cat._id) === categoryFilter);
+
+      const matchesSearch = titleMatches || localityMatches || cityMatches || categoryLower.includes(searchLower);
+      const matchesCategory = categoryFilter === 'All'
+        || categoryLower === filterLower
+        || categoryLower === String(selectedCat?.name).toLowerCase()
+        || String(p.category) === String(selectedCat?._id)
+        || String(p.category) === categoryFilter;
       const purpose = p.listingPurpose || 'For Sale';
       const matchesPurpose = purposeFilter === 'All' || purpose === purposeFilter;
       const matchesLocation = locationFilter === 'All' || p.locality === locationFilter;
@@ -102,7 +120,7 @@ export default function PropertiesPage() {
 
       return matchesSearch && matchesCategory && matchesPurpose && matchesLocation && matchesPrice;
     });
-  }, [properties, searchTerm, categoryFilter, purposeFilter, locationFilter, priceRangeFilter]);
+  }, [properties, categories, searchTerm, categoryFilter, purposeFilter, locationFilter, priceRangeFilter]);
 
   const clearFilters = () => {
     setCategoryFilter('All');
@@ -149,63 +167,8 @@ export default function PropertiesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed h-screen">
-        <div className="p-6 border-b border-gray-200 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-lg flex items-center justify-center">
-            <Building className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900 tracking-wide">DesiProperty </span>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          <Link
-            href="/dashboard"
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${pathname === '/dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
-          >
-            <Home className="w-5 h-5" /> Dashboard
-          </Link>
-          <Link
-            href="/properties"
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/properties') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
-          >
-            <Building className="w-5 h-5" /> Properties
-          </Link>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Users className="w-5 h-5" /> Leads
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Activity className="w-5 h-5" /> Appointments
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Settings className="w-5 h-5" /> Settings
-          </a>
-        </nav>
-
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <span className="text-sm font-semibold text-indigo-600">J</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">John</p>
-              <p className="text-xs text-gray-500 truncate">ADMIN</p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              router.push('/login');
-            }}
-            className="flex items-center gap-3 px-4 py-2 w-full text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors text-sm"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
-      </aside>
-
-      <main className="flex-1 md:ml-64 p-6">
+    <DashboardLayout>
+      <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6">
             <div className="flex-1 flex flex-col md:flex-row gap-4">
@@ -249,11 +212,9 @@ export default function PropertiesPage() {
                   className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset transition-all cursor-pointer"
                 >
                   <option value="All">All Categories</option>
-                  <option value="Flat/Apartment">Flat / Apartment</option>
-                  <option value="Villa/House">Villa / House</option>
-                  <option value="Plot/Land">Plot / Land</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Other">Other</option>
+                  {categories.map(cat => (
+                    <option key={cat._id} value={cat.name}>{cat.name}</option>
+                  ))}
                 </select>
 
                 <select
@@ -415,6 +376,6 @@ export default function PropertiesPage() {
           )}
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

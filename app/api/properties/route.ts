@@ -12,15 +12,28 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     // Basic server-side validation
-    const required = ['title', 'category', 'listingPurpose', 'price', 'priceType', 'city', 'locality'];
+    const required = ['title', 'category', 'listingPurpose', 'priceType', 'city', 'locality'];
     for (const key of required) {
       if (body[key] === undefined || body[key] === null || String(body[key]).trim() === '') {
         return NextResponse.json({ error: `Field ${key} is required.` }, { status: 400 });
       }
     }
 
-    if (Number(body.price) <= 0) {
-      return NextResponse.json({ error: 'Enter a valid price greater than 0.' }, { status: 400 });
+    // Pricing validation
+    if (body.pricingType === 'fixed') {
+      if (!body.price || Number(body.price) <= 0) {
+        return NextResponse.json({ error: 'Enter a valid price greater than 0.' }, { status: 400 });
+      }
+    } else if (body.pricingType === 'range') {
+      if (!body.minPrice || Number(body.minPrice) <= 0) {
+        return NextResponse.json({ error: 'Enter a valid minimum price greater than 0.' }, { status: 400 });
+      }
+      if (!body.maxPrice || Number(body.maxPrice) <= 0) {
+        return NextResponse.json({ error: 'Enter a valid maximum price greater than 0.' }, { status: 400 });
+      }
+      if (Number(body.minPrice) >= Number(body.maxPrice)) {
+        return NextResponse.json({ error: 'Minimum price must be less than maximum price.' }, { status: 400 });
+      }
     }
 
     // images validation (array of data URLs)
@@ -33,7 +46,10 @@ export async function POST(req: Request) {
       title: body.title,
       category: body.category,
       listingPurpose: body.listingPurpose,
-      price: Number(body.price),
+      pricingType: body.pricingType || 'fixed',
+      price: body.pricingType === 'fixed' ? Number(body.price) : undefined,
+      minPrice: body.pricingType === 'range' ? Number(body.minPrice) : undefined,
+      maxPrice: body.pricingType === 'range' ? Number(body.maxPrice) : undefined,
       priceType: body.priceType,
       city: body.city,
       locality: body.locality,
@@ -46,6 +62,8 @@ export async function POST(req: Request) {
       highlights: Array.isArray(body.highlights) ? body.highlights : [],
       amenities: Array.isArray(body.amenities) ? body.amenities : [],
       images,
+      videos: Array.isArray(body.videos) ? body.videos.slice(0, 5) : [],
+      documents: Array.isArray(body.documents) ? body.documents.slice(0, 10) : [],
       videoLink: body.videoLink || body.videoTourLink || undefined,
       availability: body.availability === false ? false : true,
       status: 1, // active by default
@@ -58,6 +76,7 @@ export async function POST(req: Request) {
       commercialType: body.commercialType || undefined,
       floorNumber: body.floorNumber !== undefined && body.floorNumber !== '' ? Number(body.floorNumber) : undefined,
       propertyDescription: body.propertyDescription || undefined,
+      dynamicData: body.dynamicData || {},
     };
 
     const created = await Property.create(propertyData);

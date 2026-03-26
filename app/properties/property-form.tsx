@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useParams } from 'next/navigation';
-import { X, Upload, Tag, MapPin, Home, ListChecks, Settings, Plus, AlertCircle, CheckCircle, ArrowLeft, Building, Users, Activity, LogOut } from 'lucide-react';
+import { X, Upload, Tag, MapPin, Home, ListChecks, Settings, Plus, AlertCircle, CheckCircle, ArrowLeft, Building, Users, Activity, LogOut, Layers, Video, FileText, ExternalLink } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface FormErrors {
@@ -19,6 +19,8 @@ export default function PropertyForm({}: PropertyFormProps) {
   const pathname = usePathname();
   const params = useParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   
   // Get id from URL params
   const propertyId = params?.id as string;
@@ -26,31 +28,79 @@ export default function PropertyForm({}: PropertyFormProps) {
 
   // Property Form State Interface
   interface PropertyFormState {
-    title: string; category: string; listingPurpose: string; price: number; priceType: string; city: string; locality: string; highlights: string[]; amenities: string[]; imageUrls: string[]; isAvailable: boolean;
+    title: string; category: string; listingPurpose: string; pricingType: 'fixed' | 'range'; price?: number; minPrice?: number; maxPrice?: number; priceType: string; city: string; locality: string; highlights: string[]; amenities: string[]; imageUrls: string[]; videoUrls: string[]; documentUrls: string[]; isAvailable: boolean; existingVideos?: string[]; existingDocuments?: string[];
     bhkType?: string; propertyFloorNumber?: number; totalFloorsInBuilding?: number; bedrooms?: number; numberOfFloors?: number; plotArea?: number; commercialType?: string; floorNumber?: number; propertyDescription?: string; address?: string; googleMapsLink?: string; propertyArea?: number; furnishingStatus?: string; propertyAge?: string; facingDirection?: string; videoTourLink?: string;
+    dynamicData?: { [key: string]: any };
     [key: string]: any;
   }
 
   // Form States
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoadingForm, setIsLoadingForm] = useState(isEditMode); // Show loader during edit form load
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [newProp, setNewProp] = useState<PropertyFormState>({
     title: '',
-    category: 'Flat/Apartment',
+    category: '', 
     listingPurpose: 'For Sale',
-    price: 0,
+    pricingType: 'fixed',
+    price: undefined,
+    minPrice: undefined,
+    maxPrice: undefined,
     priceType: 'Total Price',
     city: '',
     locality: '',
     highlights: [] as string[],
     amenities: [] as string[],
     imageUrls: [] as string[],
+    videoUrls: [] as string[],
+    documentUrls: [] as string[],
     isAvailable: true,
+    existingVideos: [],
+    existingDocuments: [],
+    dynamicData: {},
   });
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        // Check localStorage cache first
+        const cached = localStorage.getItem('categories_cache');
+        if (cached) {
+          const cachedData = JSON.parse(cached);
+          setCategories(cachedData);
+          setNewProp(prev => ({ ...prev, category: prev.category || cachedData[0]?.name }));
+          setIsCategoriesLoading(false);
+          return;
+        }
+
+        const res = await fetch('/api/categories?fields=_id,name,fields');
+        const data = await res.json();
+        if (data.categories && data.categories.length > 0) {
+          const cats = data.categories;
+          setCategories(cats);
+          // Cache for 5 minutes
+          localStorage.setItem('categories_cache', JSON.stringify(cats));
+          setNewProp(prev => ({ ...prev, category: prev.category || cats[0].name }));
+        }
+      } catch (error) {
+        console.error('Failed to load categories:', error);
+      } finally {
+        setIsCategoriesLoading(false);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
 
   // UI States
   const [highlightInput, setHighlightInput] = useState('');
   const [amenityInput, setAmenityInput] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [imagePreview, setImagePreview] = useState<string[]>([]);
+  const [videoPreview, setVideoPreview] = useState<string[]>([]);
+  const [documentPreview, setDocumentPreview] = useState<{name: string, url: string}[]>([]);
+  const [existingVideos, setExistingVideos] = useState<string[]>([]);
+  const [existingDocuments, setExistingDocuments] = useState<string[]>([]);
   const [uploadedCount, setUploadedCount] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
 
@@ -69,15 +119,21 @@ export default function PropertyForm({}: PropertyFormProps) {
             title: prop.title || '',
             category: prop.category || 'Flat/Apartment',
             listingPurpose: prop.listingPurpose || 'For Sale',
-            price: prop.price ?? 0,
+            pricingType: prop.pricingType || 'fixed',
+            price: prop.price || undefined,
+            minPrice: prop.minPrice || undefined,
+            maxPrice: prop.maxPrice || undefined,
             priceType: prop.priceType || 'Total Price',
             city: prop.city || '',
             locality: prop.locality || '',
             highlights: Array.isArray(prop.highlights) ? prop.highlights : [],
             amenities: Array.isArray(prop.amenities) ? prop.amenities : [],
             imageUrls: Array.isArray(prop.images) ? prop.images : [],
+            videoUrls: [], // New uploads only
+            documentUrls: [], // New uploads only
             isAvailable: prop.availability ?? true,
-            // Conditional fields based on category - these need to be stored separately or derived
+            existingVideos: Array.isArray(prop.videos) ? prop.videos : [],
+            existingDocuments: Array.isArray(prop.documents) ? prop.documents : [],
             bhkType: prop.bhkType || undefined,
             propertyFloorNumber: prop.propertyFloorNumber || undefined,
             totalFloorsInBuilding: prop.totalFloorsInBuilding || undefined,
@@ -94,34 +150,53 @@ export default function PropertyForm({}: PropertyFormProps) {
             propertyAge: prop.propertyAge || undefined,
             facingDirection: prop.facing || undefined,
             videoTourLink: prop.videoLink || undefined,
+            dynamicData: prop.dynamicData || {},
           });
           setImagePreview(Array.isArray(prop.images) ? prop.images : []);
+          setIsLoadingForm(false); // Hide loading after data is loaded
         } else {
           console.error('Failed to fetch property:', data.error);
+          setIsLoadingForm(false); // Hide loading even on error
         }
       } catch (err) {
         console.error('Error loading property for edit:', err);
+        setIsLoadingForm(false); // Hide loading on error
       }
     };
 
     fetchProperty();
   }, [propertyId]);
-
-  // Validation Logic
   const getTabErrors = (tabIndex: number): FormErrors => {
     const errs: FormErrors = {};
     if (tabIndex === 0) {
       if (!newProp.title.trim()) errs.title = 'Property title is required.';
       if (!newProp.category) errs.category = 'Please select property category.';
       if (!newProp.listingPurpose) errs.listingPurpose = 'Please select listing purpose.';
-      if (newProp.price <= 0) errs.price = 'Enter a valid price greater than 0.';
+      
+      // Pricing validation
+      if (newProp.pricingType === 'fixed') {
+        if (!newProp.price || newProp.price <= 0) errs.price = 'Enter a valid price greater than 0.';
+      } else if (newProp.pricingType === 'range') {
+        if (!newProp.minPrice || newProp.minPrice <= 0) errs.minPrice = 'Enter a valid minimum price greater than 0.';
+        if (!newProp.maxPrice || newProp.maxPrice <= 0) errs.maxPrice = 'Enter a valid maximum price greater than 0.';
+        if (newProp.minPrice && newProp.maxPrice && newProp.minPrice > newProp.maxPrice) {
+          errs.minPrice = 'Minimum price cannot be greater than maximum price.';
+        }
+      }
+      
       if (!newProp.priceType) errs.priceType = 'Please select price type.';
 
-      if (newProp.category === 'Flat/Apartment' && !newProp.bhkType) errs.bhkType = 'This field is required.';
-      if (newProp.category === 'Villa/House' && (!newProp.bedrooms || newProp.bedrooms <= 0)) errs.bedrooms = 'This field is required.';
-      if (newProp.category === 'Plot/Land' && (!newProp.plotArea || newProp.plotArea <= 0)) errs.plotArea = 'This field is required.';
-      if (newProp.category === 'Commercial' && !newProp.commercialType) errs.commercialType = 'This field is required.';
-      if (newProp.category === 'Other' && !newProp.propertyDescription?.trim()) errs.propertyDescription = 'This field is required.';
+      const cat = categories.find(c => c.name === newProp.category);
+      if (cat && cat.fields) {
+        cat.fields.forEach((field: any) => {
+          if (field.required) {
+            const val = newProp.dynamicData?.[field.name];
+            if (val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
+              errs[`dynamic_${field.name}`] = 'This field is required.';
+            }
+          }
+        });
+      }
     }
     if (tabIndex === 1) {
       if (!newProp.city.trim()) errs.city = 'City is required.';
@@ -130,15 +205,28 @@ export default function PropertyForm({}: PropertyFormProps) {
     }
     if (tabIndex === 4) {
       if (newProp.imageUrls.length === 0) errs.imageUrls = 'At least one property image is required.';
+      if (((newProp.existingVideos?.length || 0) + videoPreview.length) > 5) errs.videoUrls = 'Maximum 5 videos allowed.';
+      if (((newProp.existingDocuments?.length || 0) + documentPreview.length) > 10) errs.documentUrls = 'Maximum 10 documents allowed.';
       if (newProp.videoTourLink && !isValidUrl(newProp.videoTourLink)) errs.videoTourLink = 'Enter a valid URL.';
     }
     return errs;
   };
 
   const getTabFields = (tabIndex: number): string[] => {
-    if (tabIndex === 0) return ['title', 'category', 'listingPurpose', 'price', 'priceType', 'bhkType', 'bedrooms', 'plotArea', 'commercialType', 'propertyDescription'];
+    if (tabIndex === 0) {
+      const base = ['title', 'category', 'listingPurpose'];
+      if (newProp.pricingType === 'fixed') {
+        base.push('price');
+      } else if (newProp.pricingType === 'range') {
+        base.push('minPrice', 'maxPrice');
+      }
+      base.push('priceType');
+      const cat = categories.find(c => c.name === newProp.category);
+      const dynamics = cat?.fields?.map((f: any) => `dynamic_${f.name}`) || [];
+      return [...base, ...dynamics];
+    }
     if (tabIndex === 1) return ['city', 'locality', 'googleMapsLink'];
-    if (tabIndex === 4) return ['imageUrls', 'videoTourLink'];
+    if (tabIndex === 4) return ['imageUrls', 'videoUrls', 'documentUrls', 'videoTourLink'];
     return [];
   };
 
@@ -242,12 +330,100 @@ export default function PropertyForm({}: PropertyFormProps) {
     }
   };
 
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const fileArray: File[] = Array.from(files);
+      const validFiles = fileArray.filter((file) => {
+        const validType = ['video/mp4', 'video/quicktime'].includes(file.type);
+        if (!validType) {
+          toast.error('Only MP4 and MOV videos are supported.');
+        }
+        return validType;
+      });
+
+      if (((newProp.existingVideos?.length || 0) + validFiles.length) > 5) {
+        toast.error('Maximum 5 videos allowed.');
+        return;
+      }
+
+      validFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result as string;
+          setNewProp((prev) => ({
+            ...prev,
+            videoUrls: [...prev.videoUrls, base64String],
+          }));
+          setVideoPreview((prev) => [...prev, base64String]);
+        };
+        reader.readAsDataURL(file);
+      });
+      // Reset input
+      if (videoInputRef.current) {
+        videoInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const fileArray: File[] = Array.from(files);
+      const validFiles = fileArray.filter((file) => {
+        const validType = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type);
+        if (!validType) {
+          toast.error('Only PDF, DOC, and DOCX documents are supported.');
+        }
+        return validType;
+      });
+
+      if (((newProp.existingDocuments?.length || 0) + validFiles.length) > 10) {
+        toast.error('Maximum 10 documents allowed.');
+        return;
+      }
+
+      validFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = reader.result as string;
+          setNewProp((prev) => ({
+            ...prev,
+            documentUrls: [...prev.documentUrls, base64String],
+          }));
+          setDocumentPreview((prev) => [...prev, { name: file.name, url: base64String }]);
+        };
+        reader.readAsDataURL(file);
+      });
+      // Reset input
+      if (documentInputRef.current) {
+        documentInputRef.current.value = '';
+      }
+    }
+  };
+
   const removeImage = (index: number) => {
     setNewProp((prev) => ({
       ...prev,
       imageUrls: prev.imageUrls.filter((_, i) => i !== index),
     }));
     setImagePreview((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeVideo = (index: number) => {
+    setNewProp((prev) => ({
+      ...prev,
+      videoUrls: prev.videoUrls.filter((_, i) => i !== index),
+    }));
+    setVideoPreview((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeDocument = (index: number) => {
+    setNewProp((prev) => ({
+      ...prev,
+      documentUrls: prev.documentUrls.filter((_, i) => i !== index),
+    }));
+    setDocumentPreview((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Highlights Management
@@ -291,15 +467,7 @@ export default function PropertyForm({}: PropertyFormProps) {
     setNewProp((prev) => ({
       ...prev,
       category,
-      bhkType: undefined,
-      propertyFloorNumber: undefined,
-      totalFloorsInBuilding: undefined,
-      bedrooms: undefined,
-      numberOfFloors: undefined,
-      plotArea: undefined,
-      commercialType: undefined,
-      floorNumber: undefined,
-      propertyDescription: undefined,
+      dynamicData: {},
     }));
     setErrors({});
   };
@@ -311,10 +479,12 @@ export default function PropertyForm({}: PropertyFormProps) {
     if (validateForm()) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       try {
-        const { imageUrls, isAvailable, ...restData } = newProp;
+        const { imageUrls, videoUrls, documentUrls, existingVideos, existingDocuments, isAvailable, ...restData } = newProp;
         const payload = {
           ...restData,
           images: imageUrls,
+          videos: [...(existingVideos || []), ...videoUrls],
+          documents: [...(existingDocuments || []), ...documentUrls],
           availability: isAvailable,
         };
         const targetUrl = isEditMode && propertyId ? `/api/properties/${propertyId}` : '/api/properties';
@@ -362,245 +532,78 @@ export default function PropertyForm({}: PropertyFormProps) {
   };
 
   const renderConditionalFields = () => {
-    switch (newProp.category) {
-      case 'Flat/Apartment':
-        return (
-          <>
-            <div className="space-y-1">
+    const selectedCategory = categories.find(c => c.name === newProp.category);
+    if (!selectedCategory || !selectedCategory.fields || selectedCategory.fields.length === 0) return null;
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {selectedCategory.fields.map((field: any, idx: number) => {
+          const val = newProp.dynamicData?.[field.name] !== undefined ? newProp.dynamicData[field.name] : '';
+          
+          const handleChange = (newVal: any) => {
+             setNewProp(prev => ({ ...prev, dynamicData: { ...prev.dynamicData, [field.name]: newVal } }));
+          };
+
+          return (
+            <div key={idx} className="space-y-1">
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                BHK Type <span className="text-red-400">*</span>
+                {field.label} {field.required && <span className="text-red-400">*</span>}
               </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all text-gray-900"
-                value={newProp.bhkType || ''}
-                onChange={(e) =>
-                  setNewProp({ ...newProp, bhkType: e.target.value as any })
-                }
-              >
-                <option value="">Select BHK Type</option>
-                <option value="Studio">Studio</option>
-                <option value="1 BHK">1 BHK</option>
-                <option value="2 BHK">2 BHK</option>
-                <option value="3 BHK">3 BHK</option>
-                <option value="4 BHK">4 BHK</option>
-                <option value="5+ BHK">5+ BHK</option>
-              </select>
-              {errors.bhkType && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle size={12} /> {errors.bhkType}
+              
+              {field.type === 'text' && (
+                <input type="text" placeholder={field.placeholder || ''} value={val} onChange={(e) => handleChange(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900" />
+              )}
+              
+              {field.type === 'number' && (
+                <input type="number" placeholder={field.placeholder || ''} value={val} onChange={(e) => handleChange(e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900" />
+              )}
+              
+              {field.type === 'select' && (
+                <select value={val} onChange={(e) => handleChange(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900">
+                  <option value="">Select Option</option>
+                  {field.options?.map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              )}
+
+              {field.type === 'multiselect' && (
+                 <select multiple value={Array.isArray(val) ? val : []} onChange={(e) => handleChange(Array.from(e.target.selectedOptions, option => option.value))} className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white min-h-[100px] text-gray-900">
+                  {field.options?.map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              )}
+
+              {field.type === 'radio' && (
+                <div className="flex flex-wrap gap-4 mt-2">
+                  {field.options?.map((opt: string) => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer text-gray-900">
+                      <input type="radio" value={opt} checked={val === opt} onChange={(e) => handleChange(e.target.value)} className="w-4 h-4 accent-indigo-600" />
+                      <span className="text-sm font-medium">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {field.type === 'checkbox' && (
+                  <label className="flex items-center gap-2 cursor-pointer mt-3 text-gray-900">
+                     <input type="checkbox" checked={val === true} onChange={(e) => handleChange(e.target.checked)} className="w-5 h-5 accent-indigo-600" />
+                     <span className="text-sm font-medium">Yes</span>
+                  </label>
+              )}
+              {field.helpText && <p className="text-xs text-gray-400 mt-1">{field.helpText}</p>}
+
+              {errors[`dynamic_${field.name}`] && (
+                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                  <AlertCircle size={12} /> {errors[`dynamic_${field.name}`]}
                 </p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">
-                  Property Floor Number
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 5"
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                  value={newProp.propertyFloorNumber ?? ''}
-                  onChange={(e) =>
-                    setNewProp({
-                      ...newProp,
-                      propertyFloorNumber: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">
-                  Total Floors in Building
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 20"
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                  value={newProp.totalFloorsInBuilding ?? ''}
-                  onChange={(e) =>
-                    setNewProp({
-                      ...newProp,
-                      totalFloorsInBuilding: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </>
-        );
-
-      case 'Villa/House':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                Bedrooms <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="number"
-                required
-                min="1"
-                placeholder="e.g. 3"
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                value={newProp.bedrooms || ''}
-                onChange={(e) =>
-                  setNewProp({
-                    ...newProp,
-                    bedrooms: e.target.value ? Number(e.target.value) : undefined,
-                  })
-                }
-              />
-              {errors.bedrooms && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle size={12} /> {errors.bedrooms}
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">
-                  Number of Floors
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 2"
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                  value={newProp.numberOfFloors ?? ''}
-                  onChange={(e) =>
-                    setNewProp({
-                      ...newProp,
-                      numberOfFloors: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">
-                  Plot Area (sq ft)
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 5000"
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                  value={newProp.plotArea ?? ''}
-                  onChange={(e) =>
-                    setNewProp({
-                      ...newProp,
-                      plotArea: e.target.value ? Number(e.target.value) : undefined,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </>
-        );
-
-      case 'Commercial':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                Commercial Type <span className="text-red-400">*</span>
-              </label>
-              <select
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all text-gray-900"
-                value={newProp.commercialType || ''}
-                onChange={(e) =>
-                  setNewProp({
-                    ...newProp,
-                    commercialType: e.target.value as any,
-                  })
-                }
-              >
-                <option value="">Select Commercial Type</option>
-                <option value="Office">Office</option>
-                <option value="Shop">Shop</option>
-                <option value="Showroom">Showroom</option>
-                <option value="Warehouse">Warehouse</option>
-                <option value="Other">Other</option>
-              </select>
-              {errors.commercialType && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle size={12} /> {errors.commercialType}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-500 uppercase">
-                Floor Number
-              </label>
-              <input
-                type="number"
-                placeholder="e.g. 3"
-                className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                value={newProp.floorNumber ?? ''}
-                onChange={(e) =>
-                  setNewProp({
-                    ...newProp,
-                    floorNumber: e.target.value ? Number(e.target.value) : undefined,
-                  })
-                }
-              />
-            </div>
-          </>
-        );
-
-      case 'Plot/Land':
-        return (
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-              Plot Area (sq ft) <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="number"
-              required
-              min="1"
-              placeholder="e.g. 5000"
-              className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-              value={newProp.plotArea ?? ''}
-              onChange={(e) =>
-                setNewProp({
-                  ...newProp,
-                  plotArea: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-            />
-            {errors.plotArea && (
-              <p className="text-xs text-red-500 flex items-center gap-1">
-                <AlertCircle size={12} /> {errors.plotArea}
-              </p>
-            )}
-          </div>
-        );
-
-      case 'Other':
-        return (
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-              Property Description <span className="text-red-400">*</span>
-            </label>
-            <textarea
-              required
-              placeholder="Describe your property..."
-              rows={4}
-              className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none text-gray-900"
-              value={newProp.propertyDescription || ''}
-              onChange={(e) =>
-                setNewProp({ ...newProp, propertyDescription: e.target.value })
-              }
-            />
-            {errors.propertyDescription && (
-              <p className="text-xs text-red-500 flex items-center gap-1">
-                <AlertCircle size={12} /> {errors.propertyDescription}
-              </p>
-            )}
-          </div>
-        );
-
-      default:
-        return null;
-    }
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -626,6 +629,12 @@ export default function PropertyForm({}: PropertyFormProps) {
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/properties') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
           >
             <Building className="w-5 h-5" /> Properties
+          </Link>
+          <Link
+            href="/categories"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/categories') ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+          >
+            <Layers className="w-5 h-5" /> Categories
           </Link>
           <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
             <Users className="w-5 h-5" /> Leads
@@ -680,7 +689,29 @@ export default function PropertyForm({}: PropertyFormProps) {
 
         {/* Notification Messages (Now using react-hot-toast) */}
 
+        {/* Loading Skeleton */}
+        {isLoadingForm && (
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-pulse">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                  <div className="h-6 bg-gray-300 rounded w-1/3 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="h-10 bg-gray-200 rounded"></div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="h-10 bg-gray-200 rounded"></div>
+                    <div className="h-10 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Tabs Navigation */}
+        {!isLoadingForm && (
         <div className="flex flex-wrap gap-3 mb-8">
           {[
             { title: 'Basic Info', icon: <Tag size={16} /> },
@@ -705,7 +736,9 @@ export default function PropertyForm({}: PropertyFormProps) {
             </button>
           ))}
         </div>
+        )}
 
+        {!isLoadingForm && (
         <form
           className="relative"
           onSubmit={(e) => e.preventDefault()}
@@ -752,16 +785,15 @@ export default function PropertyForm({}: PropertyFormProps) {
                   </label>
                   <select
                     className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all text-gray-900"
-                    value={newProp.category}
+                    value={newProp.category || ''}
                     onChange={(e) =>
                       handleCategoryChange(e.target.value)
                     }
                   >
-                    <option value="Flat/Apartment">Flat / Apartment</option>
-                    <option value="Villa/House">Villa / House</option>
-                    <option value="Plot/Land">Plot / Land</option>
-                    <option value="Commercial">Commercial</option>
-                    <option value="Other">Other</option>
+                    <option value="" disabled>Select Category</option>
+                    {categories.map((cat: any) => (
+                      <option key={cat._id || cat.name} value={cat.name}>{cat.name}</option>
+                    ))}
                   </select>
                   {errors.category && (
                     <p className="text-xs text-red-500 flex items-center gap-1">
@@ -811,31 +843,116 @@ export default function PropertyForm({}: PropertyFormProps) {
               </div>
 
               {/* Price Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                    Price (INR) <span className="text-red-400">*</span>
+                    Pricing Type <span className="text-red-400">*</span>
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    placeholder="e.g. 5000000"
-                    className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                    value={newProp.price ?? ''}
-                    onChange={(e) =>
-                      setNewProp({
-                        ...newProp,
-                        price: e.target.value ? Number(e.target.value) : 0,
-                      })
-                    }
-                  />
-                  {errors.price && (
-                    <p className="text-xs text-red-500 flex items-center gap-1">
-                      <AlertCircle size={12} /> {errors.price}
-                    </p>
-                  )}
+                  <div className="flex gap-4 mt-3">
+                    {(['fixed', 'range'] as const).map((type) => (
+                      <label key={type} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="pricingType"
+                          value={type}
+                          checked={newProp.pricingType === type}
+                          onChange={(e) =>
+                            setNewProp({
+                              ...newProp,
+                              pricingType: e.target.value as 'fixed' | 'range',
+                            })
+                          }
+                          className="w-4 h-4 accent-indigo-600"
+                        />
+                        <span className="text-sm font-medium text-gray-700 capitalize">{type} Price</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
+
+                {newProp.pricingType === 'fixed' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                      Price (INR) <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="1"
+                      placeholder="e.g. 5000000"
+                      className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                      value={newProp.price || ''}
+                      onChange={(e) =>
+                        setNewProp({
+                          ...newProp,
+                          price: e.target.value === '' ? undefined : Number(e.target.value),
+                        })
+                      }
+                    />
+                    {errors.price && (
+                      <p className="text-xs text-red-500 flex items-center gap-1">
+                        <AlertCircle size={12} /> {errors.price}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {newProp.pricingType === 'range' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                        Minimum Price (INR) <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 4000000"
+                        className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                        value={newProp.minPrice || ''}
+                        onChange={(e) =>
+                          setNewProp({
+                            ...newProp,
+                            minPrice: e.target.value === '' ? undefined : Number(e.target.value),
+                          })
+                        }
+                      />
+                      {errors.minPrice && (
+                        <p className="text-xs text-red-500 flex items-center gap-1">
+                          <AlertCircle size={12} /> {errors.minPrice}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                        Maximum Price (INR) <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 6000000"
+                        className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                        value={newProp.maxPrice || ''}
+                        onChange={(e) =>
+                          setNewProp({
+                            ...newProp,
+                            maxPrice: e.target.value === '' ? undefined : Number(e.target.value),
+                          })
+                        }
+                      />
+                      {errors.maxPrice && (
+                        <p className="text-xs text-red-500 flex items-center gap-1">
+                          <AlertCircle size={12} /> {errors.maxPrice}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
@@ -1163,7 +1280,7 @@ export default function PropertyForm({}: PropertyFormProps) {
               <h2 className="text-xl font-bold text-gray-800">
                 Media
               </h2>
-              <p className="text-sm text-gray-500 mt-1">Upload images and video tour link</p>
+              <p className="text-sm text-gray-500 mt-1">Upload images, videos, and documents</p>
             </div>
 
             <div className="p-6 space-y-6">
@@ -1214,6 +1331,197 @@ export default function PropertyForm({}: PropertyFormProps) {
                           type="button"
                           onClick={() => removeImage(idx)}
                           className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Videos Upload */}
+              <div className="space-y-3 border-t border-gray-100 pt-6">
+                <label className="text-xs font-bold text-gray-500 uppercase">
+                  Property Videos
+                  <span className="text-[10px] font-normal text-gray-400 ml-2">
+                    ({(newProp.existingVideos?.length || 0) + videoPreview.length}/5)
+                  </span>
+                </label>
+
+                {/* Upload New Videos */}
+                <div
+                  onClick={() => videoInputRef.current?.click()}
+                  className="border-3 border-dashed border-green-200 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-green-500 hover:bg-green-50/50 transition-all group"
+                >
+                  <div className="p-4 bg-green-50 text-green-400 rounded-full mb-3 group-hover:bg-green-100 transition-colors">
+                    <Video size={32} />
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">Click to upload videos</span>
+                  <span className="text-xs text-gray-500 mt-2">MP4, MOV (Max 5 videos)</span>
+                  <input
+                    type="file"
+                    ref={videoInputRef}
+                    className="hidden"
+                    accept="video/mp4,video/quicktime"
+                    multiple
+                    onChange={handleVideoUpload}
+                  />
+                </div>
+
+                {/* Existing Videos */}
+                {(newProp.existingVideos?.length || 0) > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    {newProp.existingVideos?.map((videoUrl, idx) => (
+                      <div key={`existing-${idx}`} className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                        <video
+                          src={videoUrl}
+                          className="w-full h-32 object-cover"
+                          controls
+                        />
+                        <div className="absolute top-2 right-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => window.open(videoUrl, '_blank')}
+                            className="bg-blue-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="View in new tab"
+                          >
+                            <ExternalLink size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewProp((prev) => ({
+                                ...prev,
+                                existingVideos: prev.existingVideos?.filter((_, i) => i !== idx),
+                              }));
+                            }}
+                            className="bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Remove video"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* New Video Previews */}
+                {videoPreview.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    {videoPreview.map((preview, idx) => (
+                      <div key={`new-${idx}`} className="relative group rounded-xl overflow-hidden border border-gray-200">
+                        <video
+                          src={preview}
+                          className="w-full h-32 object-cover"
+                          controls
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVideo(idx)}
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Documents Upload */}
+              <div className="space-y-3 border-t border-gray-100 pt-6">
+                <label className="text-xs font-bold text-gray-500 uppercase">
+                  Property Documents
+                  <span className="text-[10px] font-normal text-gray-400 ml-2">
+                    ({(newProp.existingDocuments?.length || 0) + documentPreview.length}/10)
+                  </span>
+                </label>
+
+                {/* Upload New Documents */}
+                <div
+                  onClick={() => documentInputRef.current?.click()}
+                  className="border-3 border-dashed border-orange-200 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50/50 transition-all group"
+                >
+                  <div className="p-4 bg-orange-50 text-orange-400 rounded-full mb-3 group-hover:bg-orange-100 transition-colors">
+                    <FileText size={32} />
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">Click to upload documents</span>
+                  <span className="text-xs text-gray-500 mt-2">PDF, DOC, DOCX (Max 10 documents)</span>
+                  <input
+                    type="file"
+                    ref={documentInputRef}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx"
+                    multiple
+                    onChange={handleDocumentUpload}
+                  />
+                </div>
+
+                {/* Existing Documents */}
+                {(newProp.existingDocuments?.length || 0) > 0 && (
+                  <div className="space-y-2 mt-6">
+                    {newProp.existingDocuments?.map((docUrl, idx) => (
+                      <div key={`existing-doc-${idx}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+                        <div className="flex items-center gap-3">
+                          <FileText size={20} className="text-gray-500" />
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">Document {idx + 1}</span>
+                            <div className="flex gap-2 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => window.open(docUrl, '_blank')}
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = docUrl;
+                                  link.download = `document-${idx + 1}`;
+                                  link.click();
+                                }}
+                                className="text-xs text-green-600 hover:text-green-800 underline"
+                              >
+                                Download
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewProp((prev) => ({
+                              ...prev,
+                              existingDocuments: prev.existingDocuments?.filter((_, i) => i !== idx),
+                            }));
+                          }}
+                          className="text-red-500 hover:text-red-700 transition-colors p-1"
+                          title="Remove document"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* New Document List */}
+                {documentPreview.length > 0 && (
+                  <div className="space-y-2 mt-6">
+                    {documentPreview.map((doc, idx) => (
+                      <div key={`new-doc-${idx}`} className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-200">
+                        <div className="flex items-center gap-3">
+                          <FileText size={20} className="text-orange-500" />
+                          <span className="text-sm font-medium text-gray-700">{doc.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDocument(idx)}
+                          className="text-red-500 hover:text-red-700 transition-colors p-1"
                         >
                           <X size={16} />
                         </button>
@@ -1312,6 +1620,7 @@ export default function PropertyForm({}: PropertyFormProps) {
             )}
           </div>
         </form>
+        )}
       </div>
       </main>
     </div>

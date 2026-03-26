@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Home, LogOut, Settings, Users, Building, TrendingUp, Activity, BarChart3, Clock } from 'lucide-react';
+import { Home, LogOut, Settings, Users, Building, TrendingUp, Activity, BarChart3, Clock, Layers } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -31,55 +32,9 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed h-screen">
-        <div className="p-6 border-b border-gray-200 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-lg flex items-center justify-center">
-            <Building className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900 tracking-wide">DesiProperty</span>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-2">
-          <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-medium transition-colors">
-            <Home className="w-5 h-5 text-indigo-600" /> Dashboard
-          </Link>
-          <Link href="/properties" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors">
-            <Building className="w-5 h-5 text-gray-600" /> Properties
-          </Link>
-          <a href="#" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors">
-            <Users className="w-5 h-5 text-gray-600" /> Leads
-          </a>
-          <a href="#" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors">
-            <Activity className="w-5 h-5 text-gray-600" /> Appointments
-          </a>
-          <a href="#" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors">
-            <Settings className="w-5 h-5 text-gray-600" /> Settings
-          </a>
-        </nav>
-
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <span className="text-sm font-semibold text-indigo-600">J</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">John</p>
-              <p className="text-xs text-gray-500 truncate">ADMIN</p>
-            </div>
-          </div>
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2 w-full text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors text-sm"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
-      </aside>
-
+    <DashboardLayout>
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-8">
+      <main className="p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex justify-between items-start mb-8">
@@ -185,6 +140,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

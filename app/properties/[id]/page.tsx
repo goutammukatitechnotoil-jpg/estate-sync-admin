@@ -4,9 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, CheckCircle2, Edit, Trash2, MapPin, TrendingUp, ChevronRight,
+  ArrowLeft, CheckCircle2, Edit, MapPin, TrendingUp, ChevronRight,
   AlertCircle, Home, Building, Users, Activity, Settings, LogOut, Search
 } from 'lucide-react';
+import DashboardLayout from '@/components/DashboardLayout';
 import { toast } from 'react-hot-toast';
 
 export default function PropertyDetailPage() {
@@ -65,24 +66,6 @@ export default function PropertyDetailPage() {
     }
   };
 
-  const handleDeleteProperty = async () => {
-    if (confirm('Are you sure you want to delete this property?')) {
-      try {
-        const response = await fetch(`/api/properties/${propertyId}`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          toast.success("Property deleted");
-          router.push('/properties');
-        } else {
-          toast.error('Failed to delete property');
-        }
-      } catch (err) {
-        toast.error('Failed to delete property');
-      }
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
@@ -100,8 +83,8 @@ export default function PropertyDetailPage() {
         </div>
         <h3 className="text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
         <p className="text-rose-600 max-w-sm mb-6 text-center">{error || 'Failed to load property.'}</p>
-        <button 
-          onClick={() => router.push('/properties')} 
+        <button
+          onClick={() => router.push('/properties')}
           className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg flex items-center gap-2"
         >
           <ArrowLeft size={16} /> Back to Properties
@@ -111,55 +94,8 @@ export default function PropertyDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed h-screen">
-        <div className="p-6 border-b border-gray-200 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-lg flex items-center justify-center">
-            <Building className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900 tracking-wide">DesiProperty </span>
-        </div>
-        <nav className="flex-1 p-4 space-y-2">
-          <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors">
-            <Home className="w-5 h-5" /> Dashboard
-          </Link>
-          <Link href="/properties" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors bg-indigo-50 text-indigo-700">
-            <Building className="w-5 h-5" /> Properties
-          </Link>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Users className="w-5 h-5" /> Leads
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Activity className="w-5 h-5" /> Appointments
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors" href="#">
-            <Settings className="w-5 h-5" /> Settings
-          </a>
-        </nav>
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <span className="text-sm font-semibold text-indigo-600">J</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">John</p>
-              <p className="text-xs text-gray-500 truncate">ADMIN</p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              router.push('/login');
-            }}
-            className="flex items-center gap-3 px-4 py-2 w-full text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors text-sm"
-          >
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
-      </aside>
-
-      <main className="flex-1 md:ml-64 p-6">
+    <DashboardLayout>
+      <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
@@ -204,12 +140,6 @@ export default function PropertyDetailPage() {
                   title="Edit Property"
                 >
                   <Edit size={20} />
-                </button>
-                <button
-                  onClick={handleDeleteProperty}
-                  className="p-2 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl hover:bg-rose-100 transition-all shadow-sm"
-                >
-                  <Trash2 size={20} />
                 </button>
               </div>
             </div>
@@ -259,6 +189,15 @@ export default function PropertyDetailPage() {
                     <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>
                     <div><p className="text-xs font-bold text-gray-400 uppercase">Locality</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>
                     <div><p className="text-xs font-bold text-gray-400 uppercase">Price</p><p className="font-semibold text-gray-800">{selectedProperty.price ? `₹${(selectedProperty.price / 10000000).toFixed(2)} Cr` : '₹0'}</p></div>
+                    {selectedProperty.dynamicData && Object.entries(selectedProperty.dynamicData).map(([key, value]) => {
+                      if (value === undefined || value === null || value === '') return null;
+                      return (
+                        <div key={key}>
+                          <p className="text-xs font-bold text-gray-400 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                          <p className="font-semibold text-gray-800">{Array.isArray(value) ? value.join(', ') : String(value)}</p>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -308,6 +247,6 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       </main>
-    </div>
+    </DashboardLayout>
   );
 }

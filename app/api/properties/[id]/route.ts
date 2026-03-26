@@ -6,6 +6,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     await connectDB();
     const { id } = await params;
+
     const property = await Property.findById(id).lean();
     if (!property) {
       return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
@@ -44,6 +45,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (updates.videoTourLink !== undefined) {
       updates.videoLink = updates.videoTourLink;
       delete updates.videoTourLink;
+    }
+    if (updates.images !== undefined) {
+      updates.images = Array.isArray(updates.images) ? updates.images.slice(0, 10) : [];
+    }
+    if (updates.videos !== undefined) {
+      updates.videos = Array.isArray(updates.videos) ? updates.videos.slice(0, 5) : [];
+    }
+    if (updates.documents !== undefined) {
+      updates.documents = Array.isArray(updates.documents) ? updates.documents.slice(0, 10) : [];
     }
 
     // Prevent invalid updates

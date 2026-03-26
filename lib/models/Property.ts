@@ -4,7 +4,10 @@ export interface IProperty extends Document {
   title: string;
   category: string;
   listingPurpose: string;
-  price: number;
+  pricingType: 'fixed' | 'range'; // New: fixed price or price range
+  price?: number; // For fixed pricing
+  minPrice?: number; // For range pricing
+  maxPrice?: number; // For range pricing
   priceType: string;
   city: string;
   locality: string;
@@ -17,10 +20,13 @@ export interface IProperty extends Document {
   highlights: string[];
   amenities: string[];
   images: string[]; // stored as data URLs
+  videos: string[]; // New: video files
+  documents: string[]; // New: document files
   videoLink?: string;
   availability: boolean;
   status: number; // 1 = active, 0 = deleted (soft delete)
   createdBy?: any;
+  dynamicData?: { [key: string]: any }; // Stores dynamically generated, category-specific configurations
   // Conditional fields
   bhkType?: string; // Flat/Apartment
   propertyFloorNumber?: number; // Flat/Apartment
@@ -38,7 +44,10 @@ const PropertySchema: Schema = new Schema(
     title: { type: String, required: true },
     category: { type: String, required: true },
     listingPurpose: { type: String, required: true },
-    price: { type: Number, required: true },
+    pricingType: { type: String, enum: ['fixed', 'range'], default: 'fixed' },
+    price: { type: Number },
+    minPrice: { type: Number },
+    maxPrice: { type: Number },
     priceType: { type: String, required: true },
     city: { type: String, required: true },
     locality: { type: String, required: true },
@@ -51,10 +60,13 @@ const PropertySchema: Schema = new Schema(
     highlights: { type: [String], default: [] },
     amenities: { type: [String], default: [] },
     images: { type: [String], default: [] },
+    videos: { type: [String], default: [] },
+    documents: { type: [String], default: [] },
     videoLink: { type: String },
     availability: { type: Boolean, default: true },
     status: { type: Number, default: 1 }, // 1 = active, 0 = deleted
     createdBy: { type: Schema.Types.ObjectId, ref: 'Admin' },
+    dynamicData: { type: Schema.Types.Mixed, default: {} },
     bhkType: { type: String },
     propertyFloorNumber: { type: Number },
     totalFloorsInBuilding: { type: Number },
