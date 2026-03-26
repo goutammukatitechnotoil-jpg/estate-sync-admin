@@ -21,6 +21,7 @@ type Property = {
   city: string;
   locality: string;
   availability: boolean;
+  listingPurpose?: string;
   images?: string[];
   highlights?: string[];
 };
@@ -28,8 +29,7 @@ type Property = {
 export default function PropertiesPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
-
+  // Properties state
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -41,25 +41,6 @@ export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Multi-Image Gallery State
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-
-  const selectedProperty = useMemo(() =>
-    properties.find(p => p._id === selectedPropertyId),
-    [properties, selectedPropertyId]
-  );
-
-  const detailImages = useMemo(() => {
-    if (!selectedProperty) return [];
-    return (selectedProperty.images && selectedProperty.images.length > 0)
-      ? selectedProperty.images
-      : [];
-  }, [selectedProperty]);
-
-  useEffect(() => {
-    setSelectedImageIndex(0);
-  }, [selectedPropertyId]);
 
   // Get unique locations for filter dropdown
   const uniqueLocations = useMemo(() => {
@@ -107,7 +88,8 @@ export default function PropertiesPage() {
 
       const matchesSearch = titleMatches || localityMatches || cityMatches;
       const matchesCategory = categoryFilter === 'All' || p.category === (categoryFilter as any);
-      const matchesPurpose = purposeFilter === 'All';
+      const purpose = p.listingPurpose || 'For Sale';
+      const matchesPurpose = purposeFilter === 'All' || purpose === purposeFilter;
       const matchesLocation = locationFilter === 'All' || p.locality === locationFilter;
 
       let matchesPrice = true;
@@ -138,7 +120,6 @@ export default function PropertiesPage() {
         });
         if (response.ok) {
           setProperties(prev => prev.filter(p => p._id !== id));
-          setSelectedPropertyId(null);
         } else {
           alert('Failed to delete property');
         }
@@ -226,16 +207,14 @@ export default function PropertiesPage() {
 
       <main className="flex-1 md:ml-64 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
-          {!selectedPropertyId || !selectedProperty ? (
-        <>
           <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6">
             <div className="flex-1 flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   placeholder="Search by title..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+                  className="w-full !pl-12 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -251,302 +230,189 @@ export default function PropertiesPage() {
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-4">
+
             <div className="flex items-center gap-2 text-gray-500 mr-2">
               <SlidersHorizontal size={18} className="text-indigo-500" />
               <span className="text-xs font-bold uppercase tracking-widest">Filters</span>
             </div>
 
-            <div className="flex items-center gap-3 flex-1 overflow-x-auto whitespace-nowrap pb-1">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-              >
-                <option value="All">All Categories</option>
-                <option value="Flat/Apartment">Flat / Apartment</option>
-                <option value="Villa/House">Villa / House</option>
-                <option value="Plot/Land">Plot / Land</option>
-                <option value="Commercial">Commercial</option>
-                <option value="Other">Other</option>
-              </select>
+            {/* 👇 SCROLL CONTAINER */}
+            <div className="flex-1 overflow-x-auto pb-2 pt-2">
 
-              <select
-                value={purposeFilter}
-                onChange={(e) => setPurposeFilter(e.target.value)}
-                className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-              >
-                <option value="All">All Purposes</option>
-                <option value="For Sale">For Sale</option>
-                <option value="For Rent">For Rent</option>
-              </select>
+              {/* 👇 INNER WRAPPER (IMPORTANT) */}
+              <div className="flex items-center gap-3 whitespace-nowrap overflow-visible">
 
-              <select
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
-                className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-              >
-                <option value="All">All Locations</option>
-                {uniqueLocations.map(loc => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-
-              <select
-                value={priceRangeFilter}
-                onChange={(e) => setPriceRangeFilter(e.target.value)}
-                className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-              >
-                <option value="All">All Prices</option>
-                {priceRanges.map(range => (
-                  <option key={range.label} value={range.label}>{range.label}</option>
-                ))}
-              </select>
-
-              {(categoryFilter !== 'All' || purposeFilter !== 'All' || locationFilter !== 'All' || priceRangeFilter !== 'All' || searchTerm !== '') && (
-                <button
-                  onClick={clearFilters}
-                  className="text-[10px] font-black text-rose-500 uppercase tracking-widest hover:text-rose-700 px-2 py-1 flex items-center gap-1"
+                {/* ALL SELECTS HERE */}
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset transition-all cursor-pointer"
                 >
-                  <X size={12} /> Clear Filters
-                </button>
-              )}
-            </div>
+                  <option value="All">All Categories</option>
+                  <option value="Flat/Apartment">Flat / Apartment</option>
+                  <option value="Villa/House">Villa / House</option>
+                  <option value="Plot/Land">Plot / Land</option>
+                  <option value="Commercial">Commercial</option>
+                  <option value="Other">Other</option>
+                </select>
 
+                <select
+                  value={purposeFilter}
+                  onChange={(e) => setPurposeFilter(e.target.value)}
+                  className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset transition-all cursor-pointer"
+                >
+                  <option value="All">All Purposes</option>
+                  <option value="For Sale">For Sale</option>
+                  <option value="For Rent">For Rent</option>
+                </select>
+
+                <select
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
+                  className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset transition-all cursor-pointer"
+                >
+                  <option value="All">All Locations</option>
+                  {uniqueLocations.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={priceRangeFilter}
+                  onChange={(e) => setPriceRangeFilter(e.target.value)}
+                  className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset transition-all cursor-pointer"
+                >
+                  <option value="All">All Prices</option>
+                  {priceRanges.map(range => (
+                    <option key={range.label} value={range.label}>{range.label}</option>
+                  ))}
+                </select>
+
+                {(categoryFilter !== 'All' || purposeFilter !== 'All' || locationFilter !== 'All' || priceRangeFilter !== 'All' || searchTerm !== '') && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-[10px] font-black text-rose-500 uppercase tracking-widest hover:text-rose-700 px-2 py-1 flex items-center gap-1"
+                  >
+                    <X size={12} /> Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
               Found {filteredProperties.length} Properties
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProperties.map((prop) => (
-              <div
-                key={prop._id}
-                onClick={() => setSelectedPropertyId(prop._id)}
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all flex flex-col cursor-pointer group hover:-translate-y-1"
-              >
-                <div className="h-48 bg-gray-100 relative overflow-hidden">
-                  {(prop.images && prop.images[0]) ? (
-                    <img src={prop.images[0]} alt={prop.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                      <ImageIcon size={32} strokeWidth={1.5} />
-                      <span className="text-xs mt-2 uppercase tracking-wider font-semibold">No Preview</span>
-                    </div>
-                  )}
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-3 py-1 text-[10px] font-bold rounded-full shadow-sm border ${prop.availability ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-                      {prop.availability ? 'AVAILABLE' : 'SOLD'}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-5 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{prop.category}</span>
-                    <span className="text-lg font-bold text-gray-900">₹{(prop.price/100000).toFixed(1)}L</span>
-                  </div>
-                  <h4 className="text-lg font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-indigo-600 transition-colors">{prop.title}</h4>
-                  <div className="flex items-center gap-1 text-gray-500 text-xs mb-4">
-                    <MapPin size={12} className="shrink-0" />
-                    <span className="truncate">{prop.locality ? `${prop.locality}, ${prop.city}` : prop.city}</span>
-                  </div>
 
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {prop.highlights && prop.highlights.slice(0, 3).map((h, i) => (
-                      <span key={i} className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-tighter">{h}</span>
-                    ))}
-                    {prop.highlights && prop.highlights.length > 3 && <span className="text-[9px] text-slate-400 font-bold">+{prop.highlights.length - 3}</span>}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      <TrendingUp size={12} className="text-emerald-500" />
-                      0 Interest Matches
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm animate-pulse flex flex-col h-[380px]">
+                  <div className="h-48 bg-gray-200"></div>
+                  <div className="p-5 flex-1 flex flex-col space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="h-3 bg-gray-200 rounded w-16"></div>
+                      <div className="h-5 bg-gray-200 rounded w-20"></div>
                     </div>
-                    <ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-500 transition-colors" />
+                    <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                    <div className="flex gap-2 mb-4">
+                      <div className="h-4 bg-gray-200 rounded w-12"></div>
+                      <div className="h-4 bg-gray-200 rounded w-16"></div>
+                    </div>
+                    <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between">
+                      <div className="h-4 bg-gray-200 rounded w-24"></div>
+                      <div className="h-4 bg-gray-200 rounded w-4"></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {filteredProperties.length === 0 && (
-              <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center">
-                <Filter size={48} className="text-gray-200 mb-4" />
-                <h3 className="text-lg font-bold text-gray-400">No properties match your filters</h3>
-                <button onClick={clearFilters} className="mt-4 text-indigo-600 font-bold hover:underline">Clear all filters</button>
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        /* Property Detail View */
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSelectedPropertyId(null)}
-                className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-500 transition-all shadow-sm group mt-1"
-                title="Back to Property List"
-              >
-                <ArrowLeft size={24} className="text-gray-600 group-hover:-translate-x-1 duration-300" />
-              </button>
-              <div>
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">{selectedProperty.title || "Untitled Property"}</h2>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border text-indigo-700 bg-indigo-50 border-indigo-200`}>
-                    {selectedProperty.category}
-                  </span>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border text-amber-700 bg-amber-50 border-amber-200`}>
-                    For Sale
-                  </span>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${selectedProperty.availability ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
-                    {selectedProperty.availability ? 'AVAILABLE' : 'SOLD'}
-                  </span>
-                </div>
-                <p className="text-lg font-bold text-gray-900 mt-1">
-                  ₹{selectedProperty.price?.toLocaleString('en-IN') || '0'}
-                  <span className="text-sm text-gray-500 font-normal ml-1">(Total Price)</span>
-                </p>
-              </div>
+              ))}
             </div>
-            <div className="flex items-center gap-3">
+          ) : error ? (
+            <div className="col-span-full py-24 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm shadow-rose-100">
+                <AlertCircle size={32} className="text-rose-500" />
+              </div>
+              <h3 className="text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
+              <p className="text-rose-600 max-w-sm mb-6">{error || 'Failed to load properties. Please try again later.'}</p>
               <button
-                onClick={() => handleUpdateProperty(selectedPropertyId, { availability: !selectedProperty.availability })}
-                className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 shadow-sm"
+                onClick={() => window.location.reload()}
+                className="px-6 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200 flex items-center gap-2"
               >
-                <CheckCircle2 size={16} className={selectedProperty.availability ? 'text-gray-400' : 'text-emerald-500'} />
-                Toggle Availability
-              </button>
-              <button
-                onClick={() => router.push(`/properties/edit/${selectedPropertyId}`)}
-                className="p-2 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-all shadow-sm"
-                title="Edit Property"
-              >
-                <Edit size={20} />
-              </button>
-              <button
-                onClick={() => handleDeleteProperty(selectedPropertyId)}
-                className="p-2 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl hover:bg-rose-100 transition-all shadow-sm"
-              >
-                <Trash2 size={20} />
+                Retry
               </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-
-              {/* Media Gallery */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 space-y-4">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Media Gallery</h3>
-                {detailImages.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="h-96 w-full rounded-xl overflow-hidden bg-gray-50">
-                      <img src={detailImages[selectedImageIndex] || detailImages[0]} alt={selectedProperty.title} className="w-full h-full object-cover" />
-                    </div>
-                    {detailImages.length > 1 && (
-                      <div className="flex flex-wrap items-center gap-3">
-                        {detailImages.map((img: string, idx: number) => (
-                          <button
-                            key={idx}
-                            onClick={() => setSelectedImageIndex(idx)}
-                            className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 ease-in-out cursor-pointer ${
-                              selectedImageIndex === idx ? 'border-indigo-600 shadow-md scale-105 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'
-                            }`}
-                          >
-                            <img src={img} alt={`${selectedProperty.title} ${idx + 1}`} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
+          ) : filteredProperties.length === 0 ? (
+            <div className="col-span-full py-24 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 border border-gray-100 shadow-sm shadow-gray-100">
+                <Search size={32} className="text-gray-400" />
+              </div>
+              <h3 className="text-2xl font-black text-gray-800 mb-2">No Properties Found</h3>
+              <p className="text-gray-500 max-w-sm mb-6">We couldn't find any properties matching your criteria. Try adjusting your filters or search terms.</p>
+              {(categoryFilter !== 'All' || purposeFilter !== 'All' || locationFilter !== 'All' || priceRangeFilter !== 'All' || searchTerm !== '') && (
+                <button
+                  onClick={clearFilters}
+                  className="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+              {filteredProperties.map((prop) => (
+                <Link
+                  href={`/properties/${prop._id}`}
+                  key={prop._id}
+                  className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all flex flex-col cursor-pointer group hover:-translate-y-1 block"
+                >
+                  <div className="h-48 bg-gray-100 relative overflow-hidden">
+                    {(prop.images && prop.images[0]) ? (
+                      <img src={prop.images[0]} alt={prop.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                        <ImageIcon size={32} strokeWidth={1.5} />
+                        <span className="text-xs mt-2 uppercase tracking-wider font-semibold">No Preview</span>
                       </div>
                     )}
+                    <div className="absolute top-3 right-3">
+                      <span className={`px-3 py-1 text-[10px] font-bold rounded-full shadow-sm border ${prop.availability ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-300'}`}>
+                        {prop.availability ? 'AVAILABLE' : 'SOLD'}
+                      </span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="w-full h-64 flex flex-col items-center justify-center text-gray-300 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    <ImageIcon size={48} strokeWidth={1} />
-                    <span className="text-sm font-medium mt-2">No Images Available</span>
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{prop.category}</span>
+                      <span className="text-lg font-bold text-gray-900">
+                        {prop.price ? `₹${(prop.price / 10000000).toFixed(2)} Cr` : '₹0'}
+                      </span>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-800 mb-1 line-clamp-1 group-hover:text-indigo-600 transition-colors">{prop.title}</h4>
+                    <div className="flex items-center gap-1 text-gray-500 text-xs mb-4">
+                      <MapPin size={12} className="shrink-0" />
+                      <span className="truncate">{prop.locality ? `${prop.locality}, ${prop.city}` : prop.city}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {prop.highlights && prop.highlights.slice(0, 3).map((h, i) => (
+                        <span key={i} className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-tighter">{h}</span>
+                      ))}
+                      {prop.highlights && prop.highlights.length > 3 && <span className="text-[9px] text-slate-400 font-bold">+{prop.highlights.length - 3}</span>}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        <TrendingUp size={12} className="text-emerald-500" />
+                        0 Interest Matches
+                      </div>
+                      <ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-500 transition-colors" />
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Property Details */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Property Details</h3>
-                <div className="grid grid-cols-2 gap-6">
-                  <div><p className="text-xs font-bold text-gray-400 uppercase">Category</p><p className="font-semibold text-gray-800">{selectedProperty.category}</p></div>
-                  <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>
-                  <div><p className="text-xs font-bold text-gray-400 uppercase">Locality</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>
-                  <div><p className="text-xs font-bold text-gray-400 uppercase">Price</p><p className="font-semibold text-gray-800">₹{selectedProperty.price?.toLocaleString('en-IN')}</p></div>
-                </div>
-              </div>
-
-              {/* Highlights & Amenities */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Highlights & Amenities</h3>
-
-                <div className="space-y-6">
-                  {selectedProperty.highlights && selectedProperty.highlights.length > 0 && (
-                     <div>
-                       <p className="text-sm font-bold text-gray-700 mb-2">Highlights</p>
-                       <ul className="list-disc list-inside space-y-1">
-                         {selectedProperty.highlights.map((h: string, i: number) => (
-                           <li key={i} className="text-sm text-gray-600">{h}</li>
-                         ))}
-                       </ul>
-                     </div>
-                  )}
-
-                  {(!selectedProperty.highlights || selectedProperty.highlights.length === 0) && (
-                    <p className="text-sm text-gray-400 italic">No highlights provided.</p>
-                  )}
-                </div>
-              </div>
-
+                </Link>
+              ))}
             </div>
-
-             {/* Right column */}
-             <div className="space-y-6">
-
-               {/* Location Details */}
-               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Location</h3>
-                  <div className="space-y-4">
-                    {selectedProperty.city && <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>}
-                    {selectedProperty.locality && <div><p className="text-xs font-bold text-gray-400 uppercase">Locality / Area</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>}
-                  </div>
-               </div>
-
-               {/* System Information */}
-               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">System Info</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase">Created By</p>
-                      <p className="font-semibold text-gray-800">Admin</p>
-                    </div>
-                  </div>
-               </div>
-
-              {/* <div className="bg-indigo-600 p-8 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden">
-                <div className="relative z-10">
-                  <h3 className="text-lg font-bold mb-2">AI Performance</h3>
-                  <p className="text-xs text-indigo-100 mb-6 font-medium">This property has a <span className="font-bold underline decoration-indigo-300">92% match accuracy</span> with incoming inquiries.</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                      <AlertCircle size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Next Recommended Action</p>
-                      <p className="text-sm font-bold">Follow up with HOT leads</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 bg-indigo-400/20 rounded-full blur-2xl"></div>
-              </div> */}
-
-            </div>
-          </div>
-        </div>
-      )}
-
+          )}
         </div>
       </main>
     </div>

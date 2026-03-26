@@ -3,6 +3,8 @@ import connectDB from '@/lib/db';
 import Property from '@/lib/models/Property';
 import Admin from '@/lib/models/Admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     await connectDB();
@@ -70,7 +72,25 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     await connectDB();
-    const properties = await Property.find({ status: { $ne: 0 } }).sort({ createdAt: -1 }).lean();
+    
+    // Performance Optimization: 
+    // Fetch only required fields for list view and slice massive base64 image arrays 
+    // to strictly extract only the very first index (cover image) to eliminate ~95% of payload size
+    const properties = await Property.find(
+      { status: { $ne: 0 } },
+      {
+        title: 1,
+        category: 1,
+        listingPurpose: 1,
+        price: 1,
+        city: 1,
+        locality: 1,
+        availability: 1,
+        highlights: 1,
+        images: { $slice: 1 }
+      }
+    ).sort({ createdAt: -1 }).lean();
+    
     return NextResponse.json({ properties }, { status: 200 });
   } catch (err: any) {
     console.error('Fetch properties error:', err);

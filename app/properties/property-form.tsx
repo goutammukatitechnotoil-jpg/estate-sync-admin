@@ -108,74 +108,89 @@ export default function PropertyForm({}: PropertyFormProps) {
   }, [propertyId]);
 
   // Validation Logic
+  const getTabErrors = (tabIndex: number): FormErrors => {
+    const errs: FormErrors = {};
+    if (tabIndex === 0) {
+      if (!newProp.title.trim()) errs.title = 'Property title is required.';
+      if (!newProp.category) errs.category = 'Please select property category.';
+      if (!newProp.listingPurpose) errs.listingPurpose = 'Please select listing purpose.';
+      if (newProp.price <= 0) errs.price = 'Enter a valid price greater than 0.';
+      if (!newProp.priceType) errs.priceType = 'Please select price type.';
+
+      if (newProp.category === 'Flat/Apartment' && !newProp.bhkType) errs.bhkType = 'This field is required.';
+      if (newProp.category === 'Villa/House' && (!newProp.bedrooms || newProp.bedrooms <= 0)) errs.bedrooms = 'This field is required.';
+      if (newProp.category === 'Plot/Land' && (!newProp.plotArea || newProp.plotArea <= 0)) errs.plotArea = 'This field is required.';
+      if (newProp.category === 'Commercial' && !newProp.commercialType) errs.commercialType = 'This field is required.';
+      if (newProp.category === 'Other' && !newProp.propertyDescription?.trim()) errs.propertyDescription = 'This field is required.';
+    }
+    if (tabIndex === 1) {
+      if (!newProp.city.trim()) errs.city = 'City is required.';
+      if (!newProp.locality.trim()) errs.locality = 'Locality is required.';
+      if (newProp.googleMapsLink && !isValidUrl(newProp.googleMapsLink)) errs.googleMapsLink = 'Enter a valid URL.';
+    }
+    if (tabIndex === 4) {
+      if (newProp.imageUrls.length === 0) errs.imageUrls = 'At least one property image is required.';
+      if (newProp.videoTourLink && !isValidUrl(newProp.videoTourLink)) errs.videoTourLink = 'Enter a valid URL.';
+    }
+    return errs;
+  };
+
+  const getTabFields = (tabIndex: number): string[] => {
+    if (tabIndex === 0) return ['title', 'category', 'listingPurpose', 'price', 'priceType', 'bhkType', 'bedrooms', 'plotArea', 'commercialType', 'propertyDescription'];
+    if (tabIndex === 1) return ['city', 'locality', 'googleMapsLink'];
+    if (tabIndex === 4) return ['imageUrls', 'videoTourLink'];
+    return [];
+  };
+
+  const validateTab = (tabIndex: number): boolean => {
+    const errs = getTabErrors(tabIndex);
+    const fields = getTabFields(tabIndex);
+    setErrors(prev => {
+      const updated = { ...prev };
+      fields.forEach(f => delete updated[f]);
+      return { ...updated, ...errs };
+    });
+    return Object.keys(errs).length === 0;
+  };
+
   const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+    let allErrors = {};
+    for (let i = 0; i <= 5; i++) {
+      allErrors = { ...allErrors, ...getTabErrors(i) };
+    }
+    setErrors(allErrors);
+    return Object.keys(allErrors).length === 0;
+  };
 
-    // Basic validation
-    if (!newProp.title.trim()) {
-      newErrors.title = 'Property title is required.';
-    }
-    if (!newProp.category) {
-      newErrors.category = 'Please select property category.';
-    }
-    if (!newProp.listingPurpose) {
-      newErrors.listingPurpose = 'Please select listing purpose.';
-    }
-    if (!newProp.city.trim()) {
-      newErrors.city = 'City is required.';
-    }
-    if (!newProp.locality.trim()) {
-      newErrors.locality = 'Locality is required.';
-    }
-    if (newProp.price <= 0) {
-      newErrors.price = 'Enter a valid price greater than 0.';
-    }
-    if (!newProp.priceType) {
-      newErrors.priceType = 'Please select price type.';
-    }
-
-    // Conditional validations based on category
-    if (newProp.category === 'Flat/Apartment') {
-      if (!newProp.bhkType) {
-        newErrors.bhkType = 'This field is required.';
+  const handleTabClick = (targetIdx: number) => {
+    if (targetIdx < activeTab) {
+      setActiveTab(targetIdx);
+    } else if (targetIdx > activeTab) {
+      let canProceed = true;
+      for (let i = activeTab; i < targetIdx; i++) {
+        if (!validateTab(i)) {
+          canProceed = false;
+          setActiveTab(i);
+          // toast.error('Please fill the required fields before proceeding.');
+          setTimeout(() => {
+            const errorElement = document.querySelector('.text-red-500');
+            const container = errorElement?.closest('div');
+            const input = container?.querySelector('input, select, textarea') as HTMLElement;
+            if (input) {
+              input.focus();
+              input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (errorElement) {
+              errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+          break;
+        }
+      }
+      if (canProceed) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setActiveTab(targetIdx);
       }
     }
-    if (newProp.category === 'Villa/House') {
-      if (!newProp.bedrooms || newProp.bedrooms <= 0) {
-        newErrors.bedrooms = 'This field is required.';
-      }
-    }
-    if (newProp.category === 'Plot/Land') {
-      if (!newProp.plotArea || newProp.plotArea <= 0) {
-        newErrors.plotArea = 'This field is required.';
-      }
-    }
-    if (newProp.category === 'Commercial') {
-      if (!newProp.commercialType) {
-        newErrors.commercialType = 'This field is required.';
-      }
-    }
-    if (newProp.category === 'Other') {
-      if (!newProp.propertyDescription?.trim()) {
-        newErrors.propertyDescription = 'This field is required.';
-      }
-    }
-
-    // URL validation
-    if (newProp.googleMapsLink && !isValidUrl(newProp.googleMapsLink)) {
-      newErrors.googleMapsLink = 'Enter a valid URL.';
-    }
-    if (newProp.videoTourLink && !isValidUrl(newProp.videoTourLink)) {
-      newErrors.videoTourLink = 'Enter a valid URL.';
-    }
-
-    // Image validation
-    if (newProp.imageUrls.length === 0) {
-      newErrors.imageUrls = 'At least one property image is required.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const isValidUrl = (string: string): boolean => {
@@ -328,6 +343,21 @@ export default function PropertyForm({}: PropertyFormProps) {
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       toast.error('Please complete all required fields.');
+      for (let i = 0; i <= 5; i++) {
+        if (Object.keys(getTabErrors(i)).length > 0) {
+          setActiveTab(i);
+          setTimeout(() => {
+            const errorElement = document.querySelector('.text-red-500');
+            const container = errorElement?.closest('div');
+            const input = container?.querySelector('input, select, textarea') as HTMLElement;
+            if (input) {
+              input.focus();
+              input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+          break;
+        }
+      }
     }
   };
 
@@ -631,7 +661,7 @@ export default function PropertyForm({}: PropertyFormProps) {
       </aside>
 
       <main className="flex-1 md:ml-64 p-6">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}
         <div className="mb-8 flex items-start gap-4">
           <button
@@ -663,7 +693,7 @@ export default function PropertyForm({}: PropertyFormProps) {
             <button
               key={tab.title}
               type="button"
-              onClick={() => setActiveTab(idx)}
+              onClick={() => handleTabClick(idx)}
               className={`flex-1 min-w-[150px] px-6 py-4 rounded-2xl font-bold whitespace-nowrap transition-all flex items-center justify-center gap-2 ${
                 activeTab === idx
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105 z-10'
@@ -1265,10 +1295,7 @@ export default function PropertyForm({}: PropertyFormProps) {
             {activeTab < 5 ? (
               <button
                 type="button"
-                onClick={() => {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                  setActiveTab(prev => prev + 1);
-                }}
+                onClick={() => handleTabClick(activeTab + 1)}
                 className="w-full sm:w-auto px-10 py-4 bg-gray-900 text-white rounded-xl font-bold shadow-lg shadow-gray-200 hover:shadow-xl hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2"
               >
                 Next Step →

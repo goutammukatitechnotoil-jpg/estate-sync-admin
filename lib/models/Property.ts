@@ -69,5 +69,11 @@ const PropertySchema: Schema = new Schema(
     timestamps: true,
   }
 );
+// Database Optimization: Indexes for highly filtered fields
+PropertySchema.index({ status: 1, createdAt: -1 });
+PropertySchema.index({ category: 1 });
+PropertySchema.index({ city: 1, locality: 1 });
+PropertySchema.index({ price: 1 });
+PropertySchema.index({ availability: 1 });
 
 export default mongoose.models.Property || mongoose.model<IProperty>('Property', PropertySchema);

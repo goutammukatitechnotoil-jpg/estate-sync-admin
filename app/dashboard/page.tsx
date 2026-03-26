@@ -90,7 +90,9 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200">
                 <span className="text-sm text-gray-600">📅</span>
-                <span className="text-sm text-gray-700">Tuesday, March 25, 2026</span>
+                <span className="text-sm font-semibold text-gray-700" suppressHydrationWarning>
+                  {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
               </div>
             </div>
           </div>
