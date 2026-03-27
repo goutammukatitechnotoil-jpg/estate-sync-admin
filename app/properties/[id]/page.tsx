@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Edit, MapPin, TrendingUp, ChevronRight,
-  AlertCircle, Home, Building, Users, Activity, Settings, LogOut, Search
+  AlertCircle, Home, Building, Users, Activity, Settings, LogOut, Search,
+  Video, FileText
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { toast } from 'react-hot-toast';
@@ -68,28 +69,72 @@ export default function PropertyDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600 mb-4"></div>
-        <p className="text-gray-500 font-medium tracking-wide">Loading property details...</p>
-      </div>
+      <DashboardLayout>
+        <main className="flex-1 p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header - Always visible */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => router.push('/properties')}
+                className="p-2 mt-1 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group shrink-0"
+                title="Back to Properties List"
+              >
+                <ArrowLeft size={24} className="text-gray-600 group-hover:-translate-x-1 duration-300" />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">Property Details</h1>
+            </div>
+
+            {/* Loading state for property content */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600 mb-4"></div>
+                <p className="text-gray-500 font-medium tracking-wide">Loading property details...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </DashboardLayout>
     );
   }
 
   if (error || !selectedProperty) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm shadow-rose-100">
-          <AlertCircle size={32} className="text-rose-500" />
-        </div>
-        <h3 className="text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
-        <p className="text-rose-600 max-w-sm mb-6 text-center">{error || 'Failed to load property.'}</p>
-        <button
-          onClick={() => router.push('/properties')}
-          className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg flex items-center gap-2"
-        >
-          <ArrowLeft size={16} /> Back to Properties
-        </button>
-      </div>
+      <DashboardLayout>
+        <main className="flex-1 p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header - Always visible */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => router.push('/properties')}
+                className="p-2 mt-1 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group shrink-0"
+                title="Back to Properties List"
+              >
+                <ArrowLeft size={24} className="text-gray-600 group-hover:-translate-x-1 duration-300" />
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">Property Details</h1>
+            </div>
+
+            {/* Error state for property content */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm shadow-rose-100">
+                  <AlertCircle size={32} className="text-rose-500" />
+                </div>
+                <h3 className="text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
+                <p className="text-rose-600 max-w-sm mb-6 text-center">{error || 'Failed to load property.'}</p>
+                <button
+                  onClick={() => router.push('/properties')}
+                  className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg flex items-center gap-2"
+                >
+                  <ArrowLeft size={16} /> Back to Properties
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </DashboardLayout>
     );
   }
 
@@ -181,23 +226,127 @@ export default function PropertyDetailPage() {
                   )}
                 </div>
 
-                {/* Property Details */}
+                {/* Video Section */}
+                {(selectedProperty.videos && selectedProperty.videos.length > 0) || selectedProperty.videoLink ? (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Video Tour</h3>
+                    <div className="space-y-4">
+                      {selectedProperty.videoLink && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Video Link</p>
+                          <a
+                            href={selectedProperty.videoLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            <Video size={16} />
+                            Watch Video Tour
+                          </a>
+                        </div>
+                      )}
+                      {selectedProperty.videos && selectedProperty.videos.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Uploaded Videos</p>
+                          <div className="grid grid-cols-1 gap-3">
+                            {selectedProperty.videos.map((videoUrl: string, idx: number) => (
+                              <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                                <video
+                                  controls
+                                  className="w-full h-48 object-cover"
+                                  src={videoUrl}
+                                >
+                                  Your browser does not support the video tag.
+                                </video>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Documents Section */}
+                {selectedProperty.documents && selectedProperty.documents.length > 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Documents</h3>
+                    <div className="space-y-3">
+                      {selectedProperty.documents.map((docUrl: string, idx: number) => {
+                        const fileName = docUrl.split('/').pop() || `Document ${idx + 1}`;
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <FileText size={16} className="text-blue-600" />
+                              </div>
+                              <span className="text-sm font-medium text-gray-700">{fileName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={docUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                              >
+                                View
+                              </a>
+                              <a
+                                href={docUrl}
+                                download
+                                className="px-3 py-1 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
+                              >
+                                Download
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                   <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3 mb-4">Property Details</h3>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div><p className="text-xs font-bold text-gray-400 uppercase">Category</p><p className="font-semibold text-gray-800">{selectedProperty.category}</p></div>
-                    <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>
-                    <div><p className="text-xs font-bold text-gray-400 uppercase">Locality</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>
-                    <div><p className="text-xs font-bold text-gray-400 uppercase">Price</p><p className="font-semibold text-gray-800">{selectedProperty.price ? `₹${(selectedProperty.price / 10000000).toFixed(2)} Cr` : '₹0'}</p></div>
-                    {selectedProperty.dynamicData && Object.entries(selectedProperty.dynamicData).map(([key, value]) => {
-                      if (value === undefined || value === null || value === '') return null;
-                      return (
-                        <div key={key}>
-                          <p className="text-xs font-bold text-gray-400 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                          <p className="font-semibold text-gray-800">{Array.isArray(value) ? value.join(', ') : String(value)}</p>
+                  <div className="space-y-6">
+                    {/* Description */}
+                    {selectedProperty.propertyDescription && (
+                      <div>
+                        <p className="text-sm font-bold text-gray-700 mb-2">Description</p>
+                        <p className="text-gray-600 leading-relaxed">{selectedProperty.propertyDescription}</p>
+                      </div>
+                    )}
+
+                    {/* Basic Details Grid */}
+                    <div className="grid grid-cols-2 gap-6">
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">Category</p><p className="font-semibold text-gray-800">{selectedProperty.category}</p></div>
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">Purpose</p><p className="font-semibold text-gray-800">{selectedProperty.listingPurpose || 'For Sale'}</p></div>
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">Locality</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">Price</p><p className="font-semibold text-gray-800">{selectedProperty.price ? `₹${(selectedProperty.price / 10000000).toFixed(2)} Cr` : '₹0'}</p></div>
+                      <div><p className="text-xs font-bold text-gray-400 uppercase">Price Type</p><p className="font-semibold text-gray-800">{selectedProperty.priceType || 'Total Price'}</p></div>
+                      {selectedProperty.area && <div><p className="text-xs font-bold text-gray-400 uppercase">Area</p><p className="font-semibold text-gray-800">{selectedProperty.area} sq ft</p></div>}
+                      {selectedProperty.furnishing && <div><p className="text-xs font-bold text-gray-400 uppercase">Furnishing</p><p className="font-semibold text-gray-800">{selectedProperty.furnishing}</p></div>}
+                      {selectedProperty.propertyAge && <div><p className="text-xs font-bold text-gray-400 uppercase">Property Age</p><p className="font-semibold text-gray-800">{selectedProperty.propertyAge}</p></div>}
+                      {selectedProperty.facing && <div><p className="text-xs font-bold text-gray-400 uppercase">Facing</p><p className="font-semibold text-gray-800">{selectedProperty.facing}</p></div>}
+                    </div>
+
+                    {/* Dynamic Fields */}
+                    {selectedProperty.dynamicData && Object.keys(selectedProperty.dynamicData).length > 0 && (
+                      <div>
+                        <p className="text-sm font-bold text-gray-700 mb-3">Additional Details</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          {Object.entries(selectedProperty.dynamicData).map(([key, value]) => {
+                            if (value === undefined || value === null || value === '') return null;
+                            return (
+                              <div key={key}>
+                                <p className="text-xs font-bold text-gray-400 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                <p className="font-semibold text-gray-800">{Array.isArray(value) ? value.join(', ') : String(value)}</p>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )
-                    })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -217,6 +366,21 @@ export default function PropertyDetailPage() {
                     ) : (
                       <p className="text-sm text-gray-400 italic">No highlights provided.</p>
                     )}
+
+                    {selectedProperty.amenities && selectedProperty.amenities.length > 0 ? (
+                       <div>
+                         <p className="text-sm font-bold text-gray-700 mb-2">Amenities</p>
+                         <div className="flex flex-wrap gap-2">
+                           {selectedProperty.amenities.map((amenity: string, i: number) => (
+                             <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
+                               {amenity}
+                             </span>
+                           ))}
+                         </div>
+                       </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">No amenities specified.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -229,6 +393,21 @@ export default function PropertyDetailPage() {
                     <div className="space-y-4">
                       {selectedProperty.city && <div><p className="text-xs font-bold text-gray-400 uppercase">City</p><p className="font-semibold text-gray-800">{selectedProperty.city}</p></div>}
                       {selectedProperty.locality && <div><p className="text-xs font-bold text-gray-400 uppercase">Locality / Area</p><p className="font-semibold text-gray-800">{selectedProperty.locality}</p></div>}
+                      {selectedProperty.address && <div><p className="text-xs font-bold text-gray-400 uppercase">Address</p><p className="font-semibold text-gray-800">{selectedProperty.address}</p></div>}
+                      {selectedProperty.mapLink && (
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase mb-2">Map Location</p>
+                          <a
+                            href={selectedProperty.mapLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
+                          >
+                            <MapPin size={16} />
+                            View on Map
+                          </a>
+                        </div>
+                      )}
                     </div>
                  </div>
 

@@ -66,6 +66,9 @@ export async function POST(req: Request) {
       documents: Array.isArray(body.documents) ? body.documents.slice(0, 10) : [],
       videoLink: body.videoLink || body.videoTourLink || undefined,
       availability: body.availability === false ? false : true,
+      assignedAgentId: body.assignedAgentId || undefined,
+      siteVisitAllowed: body.siteVisitAllowed === true,
+      visitTimings: body.siteVisitAllowed ? body.visitTimings : undefined,
       status: 1, // active by default
       bhkType: body.bhkType || undefined,
       propertyFloorNumber: body.propertyFloorNumber !== undefined && body.propertyFloorNumber !== '' ? Number(body.propertyFloorNumber) : undefined,

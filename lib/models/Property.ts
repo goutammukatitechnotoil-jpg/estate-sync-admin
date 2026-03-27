@@ -24,6 +24,9 @@ export interface IProperty extends Document {
   documents: string[]; // New: document files
   videoLink?: string;
   availability: boolean;
+  assignedAgentId?: string;
+  siteVisitAllowed?: boolean;
+  visitTimings?: string;
   status: number; // 1 = active, 0 = deleted (soft delete)
   createdBy?: any;
   dynamicData?: { [key: string]: any }; // Stores dynamically generated, category-specific configurations
@@ -64,6 +67,9 @@ const PropertySchema: Schema = new Schema(
     documents: { type: [String], default: [] },
     videoLink: { type: String },
     availability: { type: Boolean, default: true },
+    assignedAgentId: { type: String },
+    siteVisitAllowed: { type: Boolean, default: false },
+    visitTimings: { type: String },
     status: { type: Number, default: 1 }, // 1 = active, 0 = deleted
     createdBy: { type: Schema.Types.ObjectId, ref: 'Admin' },
     dynamicData: { type: Schema.Types.Mixed, default: {} },

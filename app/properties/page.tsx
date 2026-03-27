@@ -14,6 +14,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import DashboardHeader from '@/components/DashboardHeader';
 
 type Property = {
   _id: string;
@@ -168,6 +169,7 @@ export default function PropertiesPage() {
 
   return (
     <DashboardLayout>
+      <DashboardHeader title="Properties" />
       <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6">
@@ -266,7 +268,7 @@ export default function PropertiesPage() {
 
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 animate-in fade-in duration-500">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm animate-pulse flex flex-col h-[380px]">
                   <div className="h-48 bg-gray-200"></div>
@@ -290,30 +292,30 @@ export default function PropertiesPage() {
               ))}
             </div>
           ) : error ? (
-            <div className="col-span-full py-24 bg-rose-50 rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm shadow-rose-100">
-                <AlertCircle size={32} className="text-rose-500" />
+            <div className="py-12 sm:py-16 md:py-24 bg-rose-50 rounded-lg sm:rounded-3xl border border-rose-100 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 px-4 sm:px-6">
+              <div className="w-12 sm:w-16 h-12 sm:h-16 bg-white rounded-full flex items-center justify-center mb-4 sm:mb-6 shadow-sm shadow-rose-100">
+                <AlertCircle size={28} className="text-rose-500" />
               </div>
-              <h3 className="text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
-              <p className="text-rose-600 max-w-sm mb-6">{error || 'Failed to load properties. Please try again later.'}</p>
+              <h3 className="text-lg sm:text-xl font-black text-rose-900 mb-2">Something went wrong</h3>
+              <p className="text-rose-600 max-w-xs sm:max-w-sm mb-4 sm:mb-6 text-sm sm:text-base">{error || 'Failed to load properties. Please try again later.'}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="px-6 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200 flex items-center gap-2"
+                className="px-4 sm:px-6 py-2 sm:py-2.5 bg-rose-600 text-white font-bold rounded-lg sm:rounded-xl hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200 flex items-center gap-2 text-sm sm:text-base"
               >
                 Retry
               </button>
             </div>
           ) : filteredProperties.length === 0 ? (
-            <div className="col-span-full py-24 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center animate-in fade-in duration-500">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 border border-gray-100 shadow-sm shadow-gray-100">
-                <Search size={32} className="text-gray-400" />
+            <div className="py-12 sm:py-16 md:py-24 bg-white rounded-lg sm:rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center animate-in fade-in duration-500 px-4 sm:px-6">
+              <div className="w-16 sm:w-20 h-16 sm:h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 sm:mb-6 border border-gray-100 shadow-sm shadow-gray-100">
+                <Search size={30} className="text-gray-400" />
               </div>
-              <h3 className="text-2xl font-black text-gray-800 mb-2">No Properties Found</h3>
-              <p className="text-gray-500 max-w-sm mb-6">We couldn't find any properties matching your criteria. Try adjusting your filters or search terms.</p>
+              <h3 className="text-lg sm:text-2xl font-black text-gray-800 mb-2">No Properties Found</h3>
+              <p className="text-gray-500 max-w-xs sm:max-w-sm mb-4 sm:mb-6 text-sm sm:text-base">We couldn't find any properties matching your criteria. Try adjusting your filters or search terms.</p>
               {(categoryFilter !== 'All' || purposeFilter !== 'All' || locationFilter !== 'All' || priceRangeFilter !== 'All' || searchTerm !== '') && (
                 <button
                   onClick={clearFilters}
-                  className="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors"
+                  className="px-4 sm:px-6 py-2 sm:py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg sm:rounded-xl hover:bg-indigo-100 transition-colors text-sm sm:text-base"
                 >
                   Clear all filters
                 </button>
@@ -332,7 +334,7 @@ export default function PropertiesPage() {
                       <img src={prop.images[0]} alt={prop.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                        <ImageIcon size={32} strokeWidth={1.5} />
+                        <ImageIcon size={28} strokeWidth={1.5} />
                         <span className="text-xs mt-2 uppercase tracking-wider font-semibold">No Preview</span>
                       </div>
                     )}
@@ -343,9 +345,9 @@ export default function PropertiesPage() {
                     </div>
                   </div>
                   <div className="p-5 flex-1 flex flex-col">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{prop.category}</span>
-                      <span className="text-lg font-bold text-gray-900">
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                      <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest shrink-0">{prop.category}</span>
+                      <span className="text-lg font-bold text-gray-900 shrink-0 whitespace-nowrap">
                         {prop.price ? `₹${(prop.price / 10000000).toFixed(2)} Cr` : '₹0'}
                       </span>
                     </div>
@@ -363,11 +365,11 @@ export default function PropertiesPage() {
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         <TrendingUp size={12} className="text-emerald-500" />
-                        0 Interest Matches
+                        <span>0 Interest Matches</span>
                       </div>
-                      <ChevronRight size={16} className="text-gray-300 group-hover:text-indigo-500 transition-colors" />
+                      <ChevronRight size={15} className="text-gray-300 group-hover:text-indigo-500 transition-colors" />
                     </div>
                   </div>
                 </Link>

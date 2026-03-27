@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Home, LogOut, Settings, Users, Building, TrendingUp, Activity, BarChart3, Clock, Layers } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import DashboardHeader from '@/components/DashboardHeader';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,26 +35,13 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       {/* Main Content */}
-      <main className="p-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-1">Dashboard</h1>
-              <p className="text-gray-600">View key performance analytics</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200">
-                <span className="text-sm text-gray-600">📅</span>
-                <span className="text-sm font-semibold text-gray-700" suppressHydrationWarning>
-                  {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-              </div>
-            </div>
-          </div>
+      <main className="flex flex-col h-full">
+        <DashboardHeader />
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="flex-1 overflow-auto p-4 sm:p-6 md:p-8">
+          <div className="max-w-7xl mx-auto w-full">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 md:mb-8">
             {stats.map((stat, idx) => {
               const IconComponent = stat.icon;
               return (
@@ -138,6 +126,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </main>
     </DashboardLayout>

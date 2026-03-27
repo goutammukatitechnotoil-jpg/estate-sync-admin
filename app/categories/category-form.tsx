@@ -6,6 +6,7 @@ import { Plus, Trash2, Save, ArrowLeft, Settings, ListPlus, Home, Building, User
 import DashboardLayout from '@/components/DashboardLayout';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
+import DashboardHeader from '@/components/DashboardHeader';
 
 interface ICategoryField {
   name: string;
@@ -21,7 +22,6 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
   const router = useRouter();
   const pathname = usePathname();
   const [name, setName] = useState('');
-  const [status, setStatus] = useState<number>(1);
   const [fields, setFields] = useState<ICategoryField[]>([]);
   const [loading, setLoading] = useState(isEdit);
 
@@ -32,7 +32,6 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
         .then(data => {
           if (data.category) {
             setName(data.category.name);
-            setStatus(data.category.status !== undefined ? data.category.status : 1);
             setFields(data.category.fields || []);
           }
         })
@@ -105,7 +104,7 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, fields, status })
+        body: JSON.stringify({ name, fields })
       });
 
       const data = await res.json();
@@ -120,25 +119,34 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading){
+     return (
+          <DashboardLayout>
+            <DashboardHeader title="Categories" />
+            <div className="flex items-center justify-center min-h-96">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          </DashboardLayout>
+        );
+  }
 
   return (
     <DashboardLayout>
       {/* Main Form Content */}
+       <DashboardHeader title="Categories" />
       <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center gap-4 mb-6">
-          {/* <button onClick={() => router.push('/categories')} className="p-2 bg-white rounded-xl shadow-sm border border-gray-200 hover:bg-gray-50"><ArrowLeft /></button> */}
-          <button
-                      type="button"
-                      onClick={() => router.push('/categories')}
-                      className="p-2 mt-1 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group shrink-0"
-                      title="Back to Categories List"
-                    >
-                       <ArrowLeft size={24} className="text-gray-600 group-hover:-translate-x-1 duration-300" />
-                    </button>
-          <h1 className="text-3xl font-bold text-gray-900">{isEdit ? 'Edit Category' : 'Create Category'}</h1>
-        </div>
+            <button
+              type="button"
+              onClick={() => router.push('/categories')}
+              className="p-2 mt-1 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group shrink-0"
+              title="Back to Categories List"
+            >
+              <ArrowLeft size={24} className="text-gray-600 group-hover:-translate-x-1 duration-300" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">{isEdit ? 'Edit Category' : 'Create Category'}</h1>
+          </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-6">
           <div className="flex-1">
@@ -150,17 +158,6 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-          </div>
-          <div className="md:w-64">
-            <label className="text-sm font-bold text-gray-700 uppercase mb-2 block">Status</label>
-            <select 
-              className="w-full p-4 border border-gray-200 rounded-xl outline-none focus:border-indigo-500 text-lg font-bold bg-white"
-              value={status}
-              onChange={(e) => setStatus(Number(e.target.value))}
-            >
-              <option value={1}>Active</option>
-              <option value={2}>Inactive</option>
-            </select>
           </div>
         </div>
 

@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Edit, Layers, Home, Building, Users, Activity, Settings, LogOut, Search } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import ToggleSwitch from '@/components/ToggleSwitch';
 import { toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
+import DashboardHeader from '@/components/DashboardHeader';
 
 export default function CategoriesPage() {
   const router = useRouter();
@@ -80,50 +82,51 @@ export default function CategoriesPage() {
 
   return (
     <DashboardLayout>
-      <main className="flex-1 p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex items-center justify-between mb-8">
+       <DashboardHeader title="Categories" />
+      <main className="flex-1 p-3 sm:p-4 md:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Property Categories</h1>
-              <p className="text-gray-500">Manage categories and their dynamic form fields.</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Property Categories</h1>
+              <p className="text-gray-500 text-sm sm:text-base">Manage categories and their dynamic form fields.</p>
             </div>
-            <Link href="/categories/add" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-indigo-700 shadow-lg transition-all active:scale-95">
-              <Plus size={18} /> Add Category
+            <Link href="/categories/add" className="px-4 sm:px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg sm:rounded-xl flex items-center gap-2 hover:bg-indigo-700 shadow-lg transition-all active:scale-95 whitespace-nowrap text-sm sm:text-base w-full sm:w-auto justify-center sm:justify-start">
+              <Plus size={17} /> Add Category
             </Link>
           </div>
 
-          <div className="relative mb-6">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <div className="relative mb-4 sm:mb-6">
+            <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search categories..."
-              className="w-full !pl-12 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+              className="w-full !pl-10 sm:!pl-12 pr-4 py-2 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm text-sm sm:text-base"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
           {loading ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-lg sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-500">
+                <table className="w-full text-left text-xs sm:text-sm text-gray-500">
                   <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th scope="col" className="px-6 py-4 font-bold">Category Name</th>
-                      <th scope="col" className="px-6 py-4 font-bold">Total Fields</th>
-                      <th scope="col" className="px-6 py-4 font-bold">Status</th>
-                      <th scope="col" className="px-6 py-4 font-bold">Created Date</th>
-                      <th scope="col" className="px-6 py-4 font-bold text-right" style={{ width: '150px' }}>Actions</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Category</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Fields</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Status</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Date</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[1, 2, 3, 4].map(i => (
                       <tr key={i} className="bg-white border-b border-gray-50 animate-pulse">
-                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-28"></div></td>
-                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
-                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16"></div></td>
-                        <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-20"></div></td>
-                        <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-14 mx-auto"></div></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4"><div className="h-3 bg-gray-200 rounded w-20 sm:w-28"></div></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4"><div className="h-3 bg-gray-200 rounded w-12 sm:w-20"></div></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4"><div className="h-3 bg-gray-200 rounded w-12 sm:w-16"></div></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4"><div className="h-3 bg-gray-200 rounded w-16 sm:w-20"></div></td>
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-right"><div className="h-3 bg-gray-200 rounded w-10 sm:w-14"></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -131,22 +134,22 @@ export default function CategoriesPage() {
               </div>
             </div>
           ) : categories.length === 0 ? (
-            <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-300">
-              <Layers size={48} className="mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">No Categories Found</h3>
-              <p className="text-gray-500 mb-6 w-full max-w-sm mx-auto">You haven't added any property categories yet. Create one to dynamically map fields to property listings.</p>
-              <Link href="/categories/add" className="px-6 py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl inline-flex items-center gap-2 hover:bg-indigo-100 transition-all">
-                <Plus size={18} /> Create First Category
+            <div className="bg-white p-6 sm:p-12 text-center rounded-lg sm:rounded-2xl border border-dashed border-gray-300">
+              <Layers size={42} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">No Categories Found</h3>
+              <p className="text-gray-500 mb-6 text-sm sm:text-base w-full max-w-xs sm:max-w-sm mx-auto">You haven't added any property categories yet. Create one to dynamically map fields to property listings.</p>
+              <Link href="/categories/add" className="px-4 sm:px-6 py-3 bg-indigo-50 text-indigo-700 font-bold rounded-lg sm:rounded-xl inline-flex items-center gap-2 hover:bg-indigo-100 transition-all">
+                <Plus size={17} /> Create First
               </Link>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-lg sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-500">
+                <table className="w-full text-left text-xs sm:text-sm text-gray-500">
                   <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th scope="col" className="px-6 py-4 font-bold">Category Name</th>
-                      <th scope="col" className="px-6 py-4 font-bold">Total Fields</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Category</th>
+                      <th scope="col" className="px-3 sm:px-6 py-3 sm:py-4 font-bold">Fields</th>
                       <th scope="col" className="px-6 py-4 font-bold">Status</th>
                       <th scope="col" className="px-6 py-4 font-bold">Created Date</th>
                       <th scope="col" className="px-6 py-4 font-bold text-right" style={{ width: '150px' }}>Actions</th>
@@ -162,21 +165,16 @@ export default function CategoriesPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span
-                            onClick={() => handleCategoryStatusToggle(cat)}
-                            className={`cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border transition-all
-                              ${cat.status === 1
-                                ? 'text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-100'
-                                : 'text-rose-600 bg-rose-50 border-rose-100 hover:bg-rose-100'
-                              }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${cat.status === 1 ? 'bg-emerald-500' : 'bg-rose-500'
-                                }`}
-                            ></span>
-
-                            {cat.status === 1 ? 'Active' : 'Inactive'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <ToggleSwitch
+                              checked={cat.status === 1}
+                              onChange={() => handleCategoryStatusToggle(cat)}
+                              size="sm"
+                            />
+                            <span className={`text-xs font-semibold ${cat.status === 1 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {cat.status === 1 ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-6 py-4 font-medium text-gray-500">
                           {new Date(cat.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
