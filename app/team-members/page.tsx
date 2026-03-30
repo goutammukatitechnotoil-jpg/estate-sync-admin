@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Plus, Users, UserCheck, UserX, Edit, Trash2, Search, Filter, MoreVertical, Phone, Mail, Building, Activity, LogOut, Layers } from 'lucide-react';
+import { Plus, Users, UserCheck, UserX, Edit, Trash2, Search, Filter, MoreVertical, Phone, Mail, Building, Activity, LogOut, Layers, Eye } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { toast } from 'react-hot-toast';
@@ -258,7 +258,7 @@ export default function TeamMembersPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Member
+                        Full Name
                       </th>
                       <th className="px-3 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Contact
@@ -325,6 +325,13 @@ export default function TeamMembersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => router.push(`/team-members/${member._id}`)}
+                              className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                              title="View"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => router.push(`/team-members/${member._id}/edit`)}
                               className="text-indigo-600 hover:text-indigo-900 p-1 rounded"

@@ -105,11 +105,15 @@ export async function GET() {
         category: 1,
         listingPurpose: 1,
         price: 1,
+        minPrice: 1,
+        maxPrice: 1,
+        pricingType: 1,
         city: 1,
         locality: 1,
         availability: 1,
         highlights: 1,
-        images: { $slice: 1 }
+        images: { $slice: 1 },
+        assignedAgentId: 1
       }
     ).sort({ createdAt: -1 }).lean();
     
