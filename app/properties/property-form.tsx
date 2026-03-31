@@ -31,7 +31,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
   // Property Form State Interface
   interface PropertyFormState {
     title: string; category: string; listingPurpose: string; pricingType: 'fixed' | 'range'; price?: number; minPrice?: number; maxPrice?: number; priceType: string; city: string; locality: string; highlights: string[]; amenities: string[]; imageUrls: string[]; videoUrls: string[]; documentUrls: string[]; isAvailable: boolean; existingVideos?: string[]; existingDocuments?: string[];
-    bhkType?: string; propertyFloorNumber?: number; totalFloorsInBuilding?: number; bedrooms?: number; numberOfFloors?: number; plotArea?: number; commercialType?: string; floorNumber?: number; propertyDescription?: string; address?: string; googleMapsLink?: string; propertyArea?: number; furnishingStatus?: string; propertyAge?: string; facingDirection?: string; videoTourLink?: string;
+    bhkType?: string; propertyFloorNumber?: number; totalFloorsInBuilding?: number; bedrooms?: number; numberOfFloors?: number; plotArea?: number; commercialType?: string; floorNumber?: number; propertyDescription?: string; address?: string; googleMapsLink?: string; propertyArea?: number; furnishingStatus?: string; propertyAge?: string; facingDirection?: string; videoTourLink?: string; vastuComplaint?: number;
     assignedAgentId?: string; siteVisitAllowed?: boolean; visitTimings?: string;
     dynamicData?: { [key: string]: any };
     [key: string]: any;
@@ -65,6 +65,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
     assignedAgentId: '',
     siteVisitAllowed: false,
     visitTimings: '',
+    vastuComplaint: undefined,
     dynamicData: {},
   });
 
@@ -105,13 +106,20 @@ export default function PropertyForm({ }: PropertyFormProps) {
   useEffect(() => {
     const fetchTeamMembers = async () => {
       try {
-        const res = await fetch('/api/team-members?status=active');
+        const res = await fetch('/api/team-members');
         const data = await res.json();
-        if (data.teamMembers) {
-          setTeamMembers(data.teamMembers);
+        if (res.ok && data.teamMembers && Array.isArray(data.teamMembers)) {
+          // Filter for active team members
+          const activeMembers = data.teamMembers.filter((member: any) => member.status === 'Active');
+          setTeamMembers(activeMembers);
+          console.log('Loaded team members:', activeMembers);
+        } else {
+          console.error('No team members data received:', data);
+          setTeamMembers([]);
         }
       } catch (error) {
         console.error('Failed to load team members:', error);
+        setTeamMembers([]);
       } finally {
         setIsTeamMembersLoading(false);
       }
@@ -178,6 +186,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
             propertyAge: prop.propertyAge || undefined,
             facingDirection: prop.facing || undefined,
             videoTourLink: prop.videoLink || undefined,
+            vastuComplaint: prop.vastuComplaint ?? undefined,
             assignedAgentId: prop.assignedAgentId || '',
             siteVisitAllowed: prop.siteVisitAllowed || false,
             visitTimings: prop.visitTimings || '',
@@ -538,7 +547,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
         });
 
         if (response.ok) {
-          toast.success(isEditMode ? 'Property updated successfully.' : 'Property added successfully.');
+          toast.success(isEditMode ? 'Property updated successfully!' : 'Property added successfully!');
           setTimeout(() => {
             router.push('/properties');
           }, 1500);
@@ -1066,22 +1075,53 @@ export default function PropertyForm({ }: PropertyFormProps) {
                   </div>
 
                   <div className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase">
-                        Property Area (sq ft)
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 1200"
-                        className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                        value={newProp.propertyArea ?? ''}
-                        onChange={(e) =>
-                          setNewProp({
-                            ...newProp,
-                            propertyArea: e.target.value ? Number(e.target.value) : undefined,
-                          })
-                        }
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">
+                          Property Area (sq ft)
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 1200"
+                          className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                          value={newProp.propertyArea ?? ''}
+                          onChange={(e) =>
+                            setNewProp({
+                              ...newProp,
+                              propertyArea: e.target.value ? Number(e.target.value) : undefined,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">
+                          Vastu Complaint
+                        </label>
+                        <div className="flex gap-4 mt-3">
+                          {[
+                            { value: 1, label: 'Yes' },
+                            { value: 0, label: 'No' }
+                          ].map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="vastuComplaint"
+                                value={option.value}
+                                checked={newProp.vastuComplaint === option.value}
+                                onChange={(e) =>
+                                  setNewProp({
+                                    ...newProp,
+                                    vastuComplaint: Number(e.target.value),
+                                  })
+                                }
+                                className="w-4 h-4 accent-indigo-600"
+                              />
+                              <span className="text-sm font-medium text-gray-700">{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     {(['Flat/Apartment', 'Villa/House', 'Commercial'] as const).includes(
@@ -1603,10 +1643,12 @@ export default function PropertyForm({ }: PropertyFormProps) {
                         <option value="" disabled>Select Agent</option>
                         {isTeamMembersLoading ? (
                           <option disabled>Loading agents...</option>
+                        ) : teamMembers.length === 0 ? (
+                          <option disabled>No active agents available</option>
                         ) : (
                           teamMembers.map((agent: any) => (
                             <option key={agent._id} value={agent._id}>
-                              {agent.fullName} - {agent.role}
+                              {agent.fullName} {agent.role ? `(${agent.role})` : ''}
                             </option>
                           ))
                         )}

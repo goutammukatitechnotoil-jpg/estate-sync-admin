@@ -13,77 +13,87 @@ interface ITeamMember {
     fullName: string;
     mobileNumber: string;
     email: string;
-    role: string;
-    status: 'Active' | 'Inactive';
-    createdAt: string;
-    updatedAt: string;
+  roleId: string;
+  status: 'Active' | 'Inactive';
+  createdAt: string;
+  updatedAt: string;
+  role?: {
+    _id: string;
+    name: string;
+    status: string;
+    permissions: {
+      properties: { view: boolean; edit: boolean };
+      categories: { view: boolean; edit: boolean };
+      teamMembers: { view: boolean; edit: boolean };
+    };
+  };
 }
 
 interface IProperty {
-    _id: string;
-    title: string;
-    category: string;
-    listingPurpose: string;
-    price?: number;
-    minPrice?: number;
-    maxPrice?: number;
-    pricingType: 'fixed' | 'range';
-    city: string;
-    locality: string;
-    availability: boolean;
-    highlights: string[];
-    images: string[];
+  _id: string;
+  title: string;
+  category: string;
+  listingPurpose: string;
+  price?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  pricingType: 'fixed' | 'range';
+  city: string;
+  locality: string;
+  availability: boolean;
+  highlights: string[];
+  images: string[];
 }
 
 export default function TeamMemberDetailsPage() {
-    const router = useRouter();
-    const params = useParams();
-    const memberId = params.id as string;
+  const router = useRouter();
+  const params = useParams();
+  const memberId = params.id as string;
 
-    const [member, setMember] = useState<ITeamMember | null>(null);
-    const [properties, setProperties] = useState<IProperty[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  const [member, setMember] = useState<ITeamMember | null>(null);
+  const [properties, setProperties] = useState<IProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (memberId) {
-            fetchMemberDetails();
-            fetchAssignedProperties();
-        }
-    }, [memberId]);
+  useEffect(() => {
+    if (memberId) {
+      fetchMemberDetails();
+      fetchAssignedProperties();
+    }
+  }, [memberId]);
 
-    const fetchMemberDetails = async () => {
-        try {
-            const res = await fetch(`/api/team-members/${memberId}`);
-            const data = await res.json();
-            if (res.ok) {
-                setMember(data.teamMember);
-            } else {
-                setError(data.error || 'Failed to load team member details');
-                toast.error('Unable to load team member details. Please try again.');
-            }
-        } catch (error) {
-            console.error('Failed to fetch team member:', error);
-            setError('Failed to load team member details');
-            toast.error('Unable to load team member details. Please try again.');
-        }
-    };
+  const fetchMemberDetails = async () => {
+    try {
+      const res = await fetch(`/api/team-members/${memberId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setMember(data.teamMember);
+      } else {
+        setError(data.error || 'Failed to load team member details');
+        toast.error('Unable to load team member details. Please try again.');
+      }
+    } catch (error) {
+      console.error('Failed to fetch team member:', error);
+      setError('Failed to load team member details');
+      toast.error('Unable to load team member details. Please try again.');
+    }
+  };
 
-    const fetchAssignedProperties = async () => {
-        try {
-            const res = await fetch('/api/properties');
-            const data = await res.json();
-            if (res.ok) {
-                // Filter properties assigned to this member
-                const assignedProperties = data.properties.filter((prop: any) => prop.assignedAgentId === memberId);
-                setProperties(assignedProperties);
-            }
-        } catch (error) {
-            console.error('Failed to fetch properties:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const fetchAssignedProperties = async () => {
+    try {
+      const res = await fetch('/api/properties');
+      const data = await res.json();
+      if (res.ok) {
+        // Filter properties assigned to this member
+        const assignedProperties = data.properties.filter((prop: any) => prop.assignedAgentId === memberId);
+        setProperties(assignedProperties);
+      }
+    } catch (error) {
+      console.error('Failed to fetch properties:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
     if (loading) {
         return (
@@ -147,7 +157,7 @@ export default function TeamMemberDetailsPage() {
                                 <h2 className="text-xl font-semibold text-gray-900">Member Profile</h2>
                             </div>
                             <Link
-                                href={`/team-members/${member._id}/edit`}
+                                href={`/team-members/edit/${member._id}`}
                                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
                             >
                                 <Edit className="w-4 h-4 mr-2" />
@@ -183,7 +193,7 @@ export default function TeamMemberDetailsPage() {
                                     <label className="block text-sm font-medium text-gray-700">Role</label>
                                     <div className="mt-1 flex items-center">
                                         <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                            {member.role}
+                                            {typeof member.role === 'string' ? member.role : member.role?.name || 'No Role'}
                                         </span>
                                     </div>
                                 </div>

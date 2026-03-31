@@ -7,6 +7,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     await connectDB();
+    
+    // Import Role here to ensure it's registered
+    const Role = (await import('@/lib/models/Role')).default;
+    
     const url = new URL(req.url);
     const statusFilter = url.searchParams.get('status');
 
@@ -17,8 +21,20 @@ export async function GET(req: Request) {
       query.status = 'Inactive';
     }
 
-    const teamMembers = await TeamMember.find(query).sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ teamMembers }, { status: 200 });
+    const teamMembers = await TeamMember.find(query)
+      .populate({ path: 'roleId', select: 'name status', strictPopulate: false })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Backwards compatibility: preserve old role field if roleId missing
+    const normalizedMembers = teamMembers.map((member: any) => {
+      if (member.roleId) {
+        member.role = member.roleId.name;
+      }
+      return member;
+    });
+
+    return NextResponse.json({ teamMembers: normalizedMembers }, { status: 200 });
   } catch (error) {
     console.error('Get team members error:', error);
     return NextResponse.json({ error: 'Failed to fetch team members' }, { status: 500 });
@@ -29,7 +45,7 @@ export async function POST(req: Request) {
   try {
     await connectDB();
     const body = await req.json();
-    const { fullName, mobileNumber, email, role } = body;
+    const { fullName, mobileNumber, email, roleId } = body;
 
     // Validation
     if (!fullName || fullName.trim() === '') {
@@ -54,8 +70,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 });
     }
 
-    if (!role) {
-      return NextResponse.json({ error: 'Please select role' }, { status: 400 });
+    if (!roleId) {
+      return NextResponse.json({ error: 'Please select a role' }, { status: 400 });
+    }
+
+    // Check if role exists and is active
+    const Role = (await import('@/lib/models/Role')).default;
+    const role = await Role.findById(roleId);
+    if (!role || role.status !== 'Active') {
+      return NextResponse.json({ error: 'Selected role is not available' }, { status: 400 });
     }
 
     // Check if email already exists
@@ -74,7 +97,7 @@ export async function POST(req: Request) {
       fullName: fullName.trim(),
       mobileNumber: mobileNumber.trim(),
       email: email.toLowerCase().trim(),
-      role: role,
+      roleId: roleId,
       status: 'Active' // Default to Active
     });
 

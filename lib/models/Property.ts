@@ -40,6 +40,7 @@ export interface IProperty extends Document {
   commercialType?: string; // Commercial
   floorNumber?: number; // Commercial
   propertyDescription?: string; // Other
+  vastuComplaint?: number; // 1 = Yes, 0 = No
 }
 
 const PropertySchema: Schema = new Schema(
@@ -82,6 +83,7 @@ const PropertySchema: Schema = new Schema(
     commercialType: { type: String },
     floorNumber: { type: Number },
     propertyDescription: { type: String },
+    vastuComplaint: { type: Number, enum: [0, 1] },
   },
   {
     timestamps: true,

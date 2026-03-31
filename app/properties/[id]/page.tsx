@@ -328,6 +328,7 @@ export default function PropertyDetailPage() {
                       {selectedProperty.furnishing && <div><p className="text-xs font-bold text-gray-400 uppercase">Furnishing</p><p className="font-semibold text-gray-800">{selectedProperty.furnishing}</p></div>}
                       {selectedProperty.propertyAge && <div><p className="text-xs font-bold text-gray-400 uppercase">Property Age</p><p className="font-semibold text-gray-800">{selectedProperty.propertyAge}</p></div>}
                       {selectedProperty.facing && <div><p className="text-xs font-bold text-gray-400 uppercase">Facing</p><p className="font-semibold text-gray-800">{selectedProperty.facing}</p></div>}
+                      {selectedProperty.vastuComplaint !== undefined && <div><p className="text-xs font-bold text-gray-400 uppercase">Vastu Complaint</p><p className="font-semibold text-gray-800">{selectedProperty.vastuComplaint === 1 ? 'Yes' : selectedProperty.vastuComplaint === 0 ? 'No' : 'Not Specified'}</p></div>}
                     </div>
 
                     {/* Dynamic Fields */}

@@ -142,6 +142,27 @@ export default function CategoriesPage() {
                 <Plus size={17} /> Create First
               </Link>
             </div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="bg-white rounded-lg sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="text-center py-8 sm:py-12 px-4">
+                <Layers className="mx-auto h-10 sm:h-12 w-10 sm:w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No categories found</h3>
+                <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                  {searchTerm ? 'Try adjusting your search criteria.' : 'Get started by adding your first category.'}
+                </p>
+                {!searchTerm && (
+                  <div className="mt-6">
+                    <Link
+                      href="/categories/add"
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Category
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="bg-white rounded-lg sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">

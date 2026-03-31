@@ -9,7 +9,7 @@ export interface IAdmin extends Document {
 const AdminSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  name: { type: String }
+  name: { type: String, default: 'Admin' }
 }, {
   timestamps: true
 });

@@ -8,11 +8,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     await connectDB();
     const { id } = await params;
-    const teamMember = await TeamMember.findById(id).lean();
+    const teamMember = await TeamMember.findById(id)
+      .populate('roleId', 'name status permissions')
+      .lean();
     if (!teamMember) {
       return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
     }
-    return NextResponse.json({ teamMember }, { status: 200 });
+    
+    // Ensure roleId is returned as string for form compatibility
+    const responseData = {
+      ...teamMember,
+      roleId: teamMember.roleId && typeof teamMember.roleId === 'object' 
+        ? (teamMember.roleId as any)._id?.toString() || teamMember.roleId.toString()
+        : teamMember.roleId?.toString() || teamMember.roleId
+    };
+    
+    return NextResponse.json({ teamMember: responseData }, { status: 200 });
   } catch (error) {
     console.error('Get team member error:', error);
     return NextResponse.json({ error: 'Failed to fetch team member' }, { status: 500 });
@@ -24,7 +35,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await connectDB();
     const { id } = await params;
     const body = await req.json();
-    const { fullName, mobileNumber, email, role, status } = body;
+    const { fullName, mobileNumber, email, roleId, status } = body;
 
     // For status-only updates (from toggle), we don't need other validations
     if (status && !fullName) {
@@ -56,8 +67,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 });
       }
 
-      if (!role) {
-        return NextResponse.json({ error: 'Please select role' }, { status: 400 });
+      if (!roleId) {
+        return NextResponse.json({ error: 'Please select a role' }, { status: 400 });
+      }
+
+      // Check if role exists and is active
+      const Role = (await import('@/lib/models/Role')).default;
+      const role = await Role.findById(roleId);
+      if (!role || role.status !== 'Active') {
+        return NextResponse.json({ error: 'Selected role is not available' }, { status: 400 });
       }
 
       // Check if email already exists (excluding current user)
@@ -84,14 +102,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (fullName) updateData.fullName = fullName.trim();
     if (mobileNumber) updateData.mobileNumber = mobileNumber.trim();
     if (email) updateData.email = email.toLowerCase().trim();
-    if (role) updateData.role = role;
+    if (roleId) updateData.roleId = roleId;
     if (status) updateData.status = status;
 
     const updatedTeamMember = await TeamMember.findByIdAndUpdate(
       id,
       updateData,
       { new: true }
-    );
+    ).populate('roleId', 'name status permissions');
 
     if (!updatedTeamMember) {
       return NextResponse.json({ error: 'Team member not found' }, { status: 404 });

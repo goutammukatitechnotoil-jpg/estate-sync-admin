@@ -8,6 +8,12 @@ import DashboardLayout from '@/components/DashboardLayout';
 import { toast } from 'react-hot-toast';
 import DashboardHeader from '@/components/DashboardHeader';
 
+interface IRole {
+  _id: string;
+  name: string;
+  status: 'Active' | 'Inactive';
+}
+
 interface TeamMemberFormProps {
   isEdit?: boolean;
   teamMemberId?: string;
@@ -15,20 +21,48 @@ interface TeamMemberFormProps {
 
 export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: TeamMemberFormProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(true);
+  const [roles, setRoles] = useState<IRole[]>([]);
   const [formData, setFormData] = useState({
     fullName: '',
     mobileNumber: '',
     email: '',
-    role: 'Agent'
+    roleId: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (isEdit && teamMemberId) {
-      fetchTeamMember();
-    }
+    const initializeForm = async () => {
+      try {
+        // Fetch roles first
+        await fetchRoles();
+        
+        // Then fetch team member data if editing
+        if (isEdit && teamMemberId) {
+          await fetchTeamMember();
+        }
+      } catch (error) {
+        console.error('Failed to initialize form:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeForm();
   }, [isEdit, teamMemberId]);
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch('/api/roles');
+      const data = await response.json();
+      if (response.ok) {
+        // Only show active roles for assignment
+        setRoles(data.roles.filter((role: IRole) => role.status === 'Active'));
+      }
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+    }
+  };
 
   const fetchTeamMember = async () => {
     try {
@@ -40,7 +74,7 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
           fullName: data.teamMember.fullName,
           mobileNumber: data.teamMember.mobileNumber,
           email: data.teamMember.email,
-          role: data.teamMember.role
+          roleId: data.teamMember.roleId
         });
       } else {
         toast.error('Failed to load team member');
@@ -49,8 +83,6 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
     } catch (error) {
       toast.error('Failed to load team member');
       router.push('/team-members');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -77,8 +109,8 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
     }
 
     // Role validation
-    if (!formData.role) {
-      newErrors.role = 'Please select role.';
+    if (!formData.roleId) {
+      newErrors.roleId = 'Please select a role.';
     }
 
     setErrors(newErrors);
@@ -251,16 +283,19 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
                 </label>
                 <select
                   className="w-full p-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-lg"
-                  value={formData.role}
-                  onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                  value={formData.roleId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, roleId: e.target.value }))}
                 >
-                  <option value="Agent">Agent</option>
-                  <option value="Admin">Admin</option>
-                  <option value="Manager">Manager</option>
+                  <option value="">Select a role</option>
+                  {roles.map((role) => (
+                    <option key={role._id} value={role._id}>
+                      {role.name}
+                    </option>
+                  ))}
                 </select>
-                {errors.role && (
+                {errors.roleId && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
-                    {errors.role}
+                    {errors.roleId}
                   </p>
                 )}
               </div>

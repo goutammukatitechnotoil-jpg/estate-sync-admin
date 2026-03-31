@@ -1,16 +1,45 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, LogOut, Settings, Users, Building, Activity, Layers, Menu, X } from 'lucide-react';
+import { Home, LogOut, Settings, Users, Building, Activity, Layers, Menu, X, Shield } from 'lucide-react';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
 
   const closeSidebar = () => setSidebarOpen(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+        }
+        // Don't redirect on error - let middleware handle authentication
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      } finally {
+        setUserLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, []); // Remove router dependency to avoid re-fetching
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -87,6 +116,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Users className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Team Members</span>
           </Link>
+          <Link
+            href="/roles"
+            onClick={closeSidebar}
+            className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/roles')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+          >
+            <Shield className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Roles</span>
+          </Link>
           <a
             onClick={closeSidebar}
             className="flex items-center gap-3 px-3 md:px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors cursor-pointer"
@@ -113,10 +152,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-3 md:p-4 border-t border-gray-200 sticky bottom-0 bg-white z-10">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-              <span className="text-sm font-semibold text-indigo-600">J</span>
+              <span className="text-sm font-semibold text-indigo-600">
+                {userLoading ? 'A' : (user?.name?.charAt(0)?.toUpperCase() || 'A')}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs md:text-sm font-medium text-gray-900 truncate">John</p>
+              <p className="text-xs md:text-sm font-medium text-gray-900 truncate">
+                {userLoading ? 'Loading...' : (user?.name || 'Admin')}
+              </p>
               <p className="text-xs text-gray-500 truncate">ADMIN</p>
             </div>
           </div>

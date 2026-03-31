@@ -109,7 +109,7 @@ export default function CategoryForm({ isEdit = false, categoryId = '' }) {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success(isEdit ? 'Category updated' : 'Category created');
+        toast.success(isEdit ? 'Category updated successfully!' : 'Category created successfully!');
         router.push('/categories');
       } else {
         toast.error(data.error || 'Failed to save category');

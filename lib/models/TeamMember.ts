@@ -4,10 +4,11 @@ export interface ITeamMember extends Document {
   fullName: string;
   mobileNumber: string;
   email: string;
-  role: 'Agent' | 'Admin' | 'Manager'; // Future-ready for more roles
+  roleId: mongoose.Types.ObjectId; // Reference to Role
   status: 'Active' | 'Inactive';
   createdAt: Date;
   updatedAt: Date;
+  role?: any; // Populated role data
 }
 
 const TeamMemberSchema: Schema = new Schema({
@@ -32,10 +33,9 @@ const TeamMemberSchema: Schema = new Schema({
       message: 'Please enter a valid email address'
     }
   },
-  role: {
-    type: String,
-    enum: ['Agent', 'Admin', 'Manager'],
-    default: 'Agent',
+  roleId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Role',
     required: true
   },
   status: {

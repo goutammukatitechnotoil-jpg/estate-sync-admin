@@ -79,6 +79,7 @@ export async function POST(req: Request) {
       commercialType: body.commercialType || undefined,
       floorNumber: body.floorNumber !== undefined && body.floorNumber !== '' ? Number(body.floorNumber) : undefined,
       propertyDescription: body.propertyDescription || undefined,
+      vastuComplaint: body.vastuComplaint !== undefined ? Number(body.vastuComplaint) : undefined,
       dynamicData: body.dynamicData || {},
     };
 

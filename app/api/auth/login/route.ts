@@ -46,8 +46,9 @@ export async function POST(req: Request) {
 
     // Create JWT
     const token = await new SignJWT({
-      id: admin._id,
+      id: admin._id.toString(),
       email: admin.email,
+      name: admin.name || 'Admin'
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
