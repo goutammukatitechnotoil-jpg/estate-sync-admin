@@ -67,17 +67,32 @@ const parseCSV = (workbook: XLSX.WorkBook) => {
   });
 };
 
+// Helper function to normalize boolean values for preview
+const normalizeBooleanForDisplay = (value: any): string => {
+  if (value === undefined || value === null || value === '') return '';
+  const str = String(value).trim().toLowerCase();
+
+  if (['1', 'yes', 'true', 'y', 'on', 'enabled', 'active'].includes(str)) return 'Yes (1)';
+  if (['0', 'no', 'false', 'n', 'off', 'disabled', 'inactive'].includes(str)) return 'No (0)';
+
+  return String(value).trim();
+};
+
 export default function BulkUploadPropertyPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [fileName, setFileName] = useState<string>('');
 
   useEffect(() => {
     const loadCategories = async () => {
-      setLoading(true);
+      setIsCategoriesLoading(true);
       try {
         const res = await fetch('/api/categories?status=active');
         const data = await res.json();
@@ -89,7 +104,7 @@ export default function BulkUploadPropertyPage() {
       } catch (e) {
         toast.error('Failed to fetch categories.');
       } finally {
-        setLoading(false);
+        setIsCategoriesLoading(false);
       }
     };
     loadCategories();
@@ -100,23 +115,46 @@ export default function BulkUploadPropertyPage() {
     return categories.find((cat) => String(cat.name).toLowerCase() === String(selectedCategory).toLowerCase());
   }, [categories, selectedCategory]);
 
-  const handleDownloadTemplate = () => {
-    if (!selectedCategory || !selectedCategoryConfig) {
+  const handleDownloadTemplate = async () => {
+    if (!selectedCategory) {
       toast.error('Please select a category first.');
       return;
     }
 
-    const dynamicHeaders = Array.isArray(selectedCategoryConfig.fields)
-      ? selectedCategoryConfig.fields.map((f: any) => (f.label ? f.label : f.name))
-      : [];
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/properties/bulk/template?category=${encodeURIComponent(selectedCategory)}`);
+      if (!res.ok) {
+        let errMessage = 'Failed to download template';
+        try {
+          const errorData = await res.json();
+          errMessage = errorData?.error || errorData?.details || errMessage;
+        } catch (parseErr) {
+          console.warn('Template error response not JSON', parseErr);
+        }
+        toast.error(errMessage);
+        return;
+      }
 
-    const headers = [...COMMON_HEADERS, ...dynamicHeaders];
-    const templateRow = headers.reduce((acc, h) => ({ ...acc, [h]: '' }), {} as any);
-    const ws = XLSX.utils.json_to_sheet([templateRow]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, `property-template-${selectedCategory.replace(/\s+/g, '-').toLowerCase()}.xlsx`);
-    toast.success('Template downloaded.');
+      const buffer = await res.arrayBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `property_bulk_upload_${selectedCategory.replace(/\s+/g, '_').toLowerCase()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Template downloaded for ${selectedCategory}`);
+    } catch (error) {
+      console.error('Template download error:', error);
+      toast.error('Failed to download template');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFileInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,7 +167,7 @@ export default function BulkUploadPropertyPage() {
       return;
     }
 
-    if (!selectedCategory || !selectedCategoryConfig) {
+    if (!selectedCategory) {
       toast.error('Please select a category before uploading.');
       return;
     }
@@ -149,8 +187,29 @@ export default function BulkUploadPropertyPage() {
         return;
       }
 
+      // Show preview instead of uploading immediately
+      setPreviewData(parsedRows);
+      setFileName(file.name);
+      setShowPreview(true);
+      setUploading(false);
+      event.target.value = '';
+    } catch (error) {
+      console.error('File processing error', error);
+      toast.error('Failed to process file.');
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!previewData.length) return;
+
+    try {
+      setUploading(true);
+      setShowPreview(false);
+
       // Attach category value if missing
-      const rows = parsedRows.map((row) => ({ ...row, category: row.category || selectedCategory }));
+      const rows = previewData.map((row) => row); // No need to attach category, it's in the Excel
       console.log('Rows to send:', rows);
 
       const res = await fetch('/api/properties/bulk', {
@@ -168,15 +227,31 @@ export default function BulkUploadPropertyPage() {
       } else {
         const successCount = data.inserted || 0;
         const failCount = data.failed || 0;
-        toast.success(`Upload complete: ${successCount} inserted, ${failCount} failed.`);
+
+        if (successCount > 0) {
+          toast.success(`Upload complete: ${successCount} inserted, ${failCount} failed.`);
+        } else {
+          toast.error(`Upload failed: ${failCount} errors found.`);
+        }
+
+        if (failCount > 0) {
+          toast.error('Please check the error details below and download the error report for corrections.');
+        }
       }
     } catch (error) {
       console.error('Upload error', error);
       toast.error('Failed to process upload.');
     } finally {
       setUploading(false);
-      event.target.value = '';
+      setPreviewData([]);
+      setFileName('');
     }
+  };
+
+  const handleCancelPreview = () => {
+    setShowPreview(false);
+    setPreviewData([]);
+    setFileName('');
   };
 
   const downloadErrorReport = () => {
@@ -185,35 +260,27 @@ export default function BulkUploadPropertyPage() {
       return;
     }
 
-    // Collect all unique keys from error data to ensure consistent structure
-    const allKeys = new Set<string>();
-    allKeys.add('row');
-    allKeys.add('errors');
-    result.errors.forEach((item: any) => {
-      if (item.data) {
-        Object.keys(item.data).forEach(key => allKeys.add(key));
-      }
-    });
+    try {
+      // Create error report data
+      const errorData = result.errors.map((error: any) => ({
+        'Row Number': error.row,
+        'Field Name': error.field,
+        'Wrong Value': error.value,
+        'Error Reason': error.error
+      }));
 
-    // Create rows with all keys to prevent duplicate headers
-    const rows = result.errors.map((item: any) => {
-      const row: any = {
-        row: item.row,
-        errors: (item.errors || []).join(' | '),
-      };
-      allKeys.forEach(key => {
-        if (!['row', 'errors'].includes(key)) {
-          row[key] = item.data?.[key] ?? '';
-        }
-      });
-      return row;
-    });
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(errorData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Errors');
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Errors');
-    XLSX.writeFile(wb, 'property-upload-errors.xlsx');
-    toast.success('Error report downloaded.');
+      // Download file
+      XLSX.writeFile(wb, 'bulk_upload_errors.xlsx');
+      toast.success('Error report downloaded');
+    } catch (error) {
+      console.error('Error report generation failed:', error);
+      toast.error('Failed to generate error report');
+    }
   };
 
   return (
@@ -234,29 +301,36 @@ export default function BulkUploadPropertyPage() {
           </div>
 
           <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <div className="flex flex-col">
                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Select Category</label>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
-                  disabled={loading}
+                  className="w-full h-12 p-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={isCategoriesLoading}
                 >
-                  <option value="">Choose category</option>
+                  <option value="">
+                    {isCategoriesLoading ? 'Loading categories...' : 'Choose category'}
+                  </option>
                   {categories.map((category) => (
                     <option key={category._id} value={category.name}>
                       {category.name}
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-500 mt-1 h-5">
+                  {selectedCategoryConfig
+                    ? `Template will include ${selectedCategoryConfig.fields?.length || 0} category-specific fields`
+                    : ''}
+                </p>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex items-center justify-end">
                 <button
                   type="button"
                   onClick={handleDownloadTemplate}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700"
-                  disabled={!selectedCategory || loading}
+                  className="w-full h-12 inline-flex items-center justify-center gap-2 px-4 font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50"
+                  disabled={!selectedCategory || loading || isCategoriesLoading}
                 >
                   <Download size={16} /> Download Template
                 </button>
@@ -264,13 +338,16 @@ export default function BulkUploadPropertyPage() {
             </div>
 
             <div className="border-t border-gray-100 pt-6">
-              <p className="text-sm text-gray-500 mb-2">Upload filled template (.xlsx, .xls, .csv):</p>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Upload Filled Template</h3>
+                <p className="text-sm text-gray-600">Upload your completed Excel/CSV file (.xlsx, .xls, .csv)</p>
+              </div>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={handleFileInput}
-                className="block w-full text-sm text-gray-700 border border-gray-200 rounded-xl p-3"
-                disabled={uploading}
+                className="block w-full text-sm text-gray-700 border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={uploading || showPreview}
               />
             </div>
 
@@ -278,31 +355,159 @@ export default function BulkUploadPropertyPage() {
               <div className="text-sm text-blue-600">Processing upload, please wait...</div>
             )}
 
+            {showPreview && previewData.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-blue-900">File Preview</h3>
+                    <p className="text-sm text-blue-700">File: {fileName} | Rows: {previewData.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelPreview}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                      disabled={uploading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmUpload}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      disabled={uploading}
+                    >
+                      {uploading ? 'Uploading...' : 'Confirm Upload'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-96">
+                  <table className="min-w-full divide-y divide-blue-200">
+                    <thead className="bg-blue-100">
+                      <tr>
+                        {Object.keys(previewData[0] || {}).map((key) => (
+                          <th
+                            key={key}
+                            className="px-3 py-2 text-left text-xs font-medium text-blue-700 uppercase tracking-wider"
+                          >
+                            {key}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-blue-200">
+                      {previewData.slice(0, 5).map((row, index) => (
+                        <tr key={index} className="hover:bg-blue-25">
+                          {Object.keys(row).map((key) => {
+                            const rawValue = String(row[key] || '');
+                            let displayValue = rawValue;
+                            let isBooleanField = false;
+
+                            // Check if this is a boolean field and show normalized value
+                            const lowerKey = key.toLowerCase();
+                            if (['isavailable', 'available', 'sitevisitallowed', 'sitevisit', 'vastucomplaint', 'vastu'].includes(lowerKey)) {
+                              const normalized = normalizeBooleanForDisplay(row[key]);
+                              if (normalized !== rawValue) {
+                                displayValue = `${rawValue} → ${normalized}`;
+                                isBooleanField = true;
+                              }
+                            }
+
+                            return (
+                              <td
+                                key={key}
+                                className={`px-3 py-2 text-sm max-w-xs truncate ${isBooleanField ? 'text-blue-700 font-medium' : 'text-gray-900'}`}
+                                title={displayValue}
+                              >
+                                {displayValue}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                      {previewData.length > 5 && (
+                        <tr>
+                          <td
+                            colSpan={Object.keys(previewData[0] || {}).length}
+                            className="px-3 py-2 text-sm text-blue-600 italic text-center"
+                          >
+                            ... and {previewData.length - 5} more rows
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 text-xs text-blue-600">
+                  <p>Showing first 5 rows of {previewData.length} total rows.</p>
+                  <p className="mt-1"><strong>Boolean fields</strong> (highlighted in blue) show how values will be normalized: &ldquo;Yes&rdquo; → &ldquo;Yes (1)&rdquo;, &ldquo;No&rdquo; → &ldquo;No (0)&rdquo;, etc.</p>
+                  <p className="mt-1">Click &ldquo;Confirm Upload&rdquo; to proceed.</p>
+                </div>
+              </div>
+            )}
+
             {result && (
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-sm text-gray-800 mb-2">
-                  <CheckCircle2 size={16} className="text-emerald-500" />
-                  <span>{result.inserted || 0} rows imported.</span>
-                  <span className="text-rose-500">{result.failed || 0} rows failed.</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-800">
+                    <CheckCircle2 size={16} className="text-emerald-500" />
+                    <span>{result.inserted || 0} rows imported successfully.</span>
+                    {result.failed > 0 && (
+                      <span className="text-rose-500">{result.failed || 0} rows failed.</span>
+                    )}
+                  </div>
+                  {result.failed > 0 && (
+                    <button
+                      onClick={downloadErrorReport}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700"
+                    >
+                      <AlertCircle size={14} /> Download Error Report
+                    </button>
+                  )}
                 </div>
-                {result.failed > 0 && (
-                  <button
-                    onClick={downloadErrorReport}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-rose-600 rounded-lg hover:bg-rose-700"
-                  >
-                    <AlertCircle size={14} /> Download Error Report
-                  </button>
+                {result.errors?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Error Details:</p>
+                    <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="px-2 py-1 text-left">Row</th>
+                            <th className="px-2 py-1 text-left">Field</th>
+                            <th className="px-2 py-1 text-left">Wrong Value</th>
+                            <th className="px-2 py-1 text-left">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {result.errors.slice(0, 10).map((error: any, idx: number) => (
+                            <tr key={idx} className="border-t border-gray-200">
+                              <td className="px-2 py-1">{error.row}</td>
+                              <td className="px-2 py-1 font-medium">{error.field}</td>
+                              <td className="px-2 py-1 text-red-600">{error.value}</td>
+                              <td className="px-2 py-1 text-red-600">{error.error}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {result.errors.length > 10 && (
+                      <p className="text-xs text-gray-500 mt-2">Showing first 10 errors. Download full report for complete details.</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
 
             <div className="text-xs text-gray-500">
-              Template fields:
-              <ul className="list-disc pl-5 mt-1">
-                <li>Required: title, category, listingPurpose, city, locality, priceType</li>
-                <li>Pricing controls: pricingType=fixed requires price, pricingType=range requires minPrice/maxPrice</li>
-                <li>Assigned Agent must match team member name/email.</li>
-                <li>Dynamic fields upto selected category appear in template.</li>
+              <strong>How it works:</strong>
+              <ul className="list-disc pl-5 mt-1 space-y-1">
+                <li>Upload your Excel/CSV file to see a preview of the data before uploading</li>
+                <li>Review the preview table and confirm upload when ready</li>
+                <li><strong>Required fields:</strong> title, category, listingPurpose, city, locality, priceType</li>
+                <li><strong>Pricing:</strong> pricingType=fixed requires price, pricingType=range requires minPrice/maxPrice</li>
+                <li><strong>Boolean fields</strong> (Yes/No, Available/Not Available, etc.) accept: <code className="bg-gray-100 px-1 rounded">1/0</code>, <code className="bg-gray-100 px-1 rounded">Yes/No</code>, <code className="bg-gray-100 px-1 rounded">True/False</code>, <code className="bg-gray-100 px-1 rounded">On/Off</code></li>
+                <li><strong>Assigned Agent:</strong> Must match team member name/email</li>
+                <li><strong>Dynamic fields:</strong> For selected category appear in template</li>
               </ul>
             </div>
           </div>
@@ -330,7 +535,7 @@ export default function BulkUploadPropertyPage() {
               <p className="text-sm font-bold text-rose-700">Failed Rows</p>
               <ul className="text-xs text-rose-600 list-disc pl-5 mt-2 max-h-52 overflow-auto">
                 {result.errors.slice(0, 20).map((item: any, idx: number) => (
-                  <li key={idx}>Row {item.row}: {item.errors.join(', ')}</li>
+                  <li key={idx}>Row {item.row}: {(item.errors || []).join(', ')}</li>
                 ))}
               </ul>
               {result.errors.length > 20 && (

@@ -3,8 +3,116 @@ import connectDB from '@/lib/db';
 import Property from '@/lib/models/Property';
 import Category from '@/lib/models/Category';
 import TeamMember from '@/lib/models/TeamMember';
+import * as XLSX from 'xlsx';
 
 export const dynamic = 'force-dynamic';
+
+interface ValidationError {
+  row: number;
+  field: string;
+  value: any;
+  error: string;
+}
+
+interface ProcessedRow {
+  rowNumber: number;
+  data: any;
+  errors: ValidationError[];
+  isValid: boolean;
+}
+
+// Validation functions
+const validateRequired = (value: any, fieldName: string): string | null => {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return `${fieldName} is required`;
+  }
+  return null;
+};
+
+const validateCategory = (value: any, categories: any[]): string | null => {
+  if (!value) return 'Category is required';
+  const categoryName = String(value).trim();
+  const category = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
+  if (!category) {
+    return `Invalid category: ${categoryName}. Available: ${categories.map(c => c.name).join(', ')}`;
+  }
+  return null;
+};
+
+const validateAgent = (value: any, agents: any[]): string | null => {
+  if (!value || String(value).trim() === '') return null; // Agent is optional
+  const agentName = String(value).trim();
+  const agent = agents.find(a =>
+    a.fullName.toLowerCase() === agentName.toLowerCase() ||
+    a.email.toLowerCase() === agentName.toLowerCase()
+  );
+  if (!agent) {
+    return `Invalid agent: ${agentName}. Available: ${agents.map(a => `${a.fullName} (${a.email})`).join(', ')}`;
+  }
+  return null;
+};
+
+const validateListingPurpose = (value: any): string | null => {
+  if (!value) return 'Listing purpose is required';
+  const purpose = String(value).trim();
+  if (!['For Sale', 'For Rent'].includes(purpose)) {
+    return `Invalid listing purpose: ${purpose}. Must be 'For Sale' or 'For Rent'`;
+  }
+  return null;
+};
+
+const validatePricingType = (value: any): string | null => {
+  if (!value) return 'Pricing type is required';
+  const type = String(value).trim();
+  if (!['fixed', 'range'].includes(type)) {
+    return `Invalid pricing type: ${type}. Must be 'fixed' or 'range'`;
+  }
+  return null;
+};
+
+const validatePriceFields = (pricingType: string, price: any, minPrice: any, maxPrice: any): string | null => {
+  if (pricingType === 'fixed') {
+    if (!price || isNaN(Number(price))) {
+      return 'Price is required for fixed pricing type';
+    }
+    if (Number(price) <= 0) {
+      return 'Price must be greater than 0';
+    }
+  } else if (pricingType === 'range') {
+    if (!minPrice || isNaN(Number(minPrice))) {
+      return 'Min price is required for range pricing type';
+    }
+    if (!maxPrice || isNaN(Number(maxPrice))) {
+      return 'Max price is required for range pricing type';
+    }
+    if (Number(minPrice) <= 0 || Number(maxPrice) <= 0) {
+      return 'Prices must be greater than 0';
+    }
+    if (Number(minPrice) >= Number(maxPrice)) {
+      return 'Min price must be less than max price';
+    }
+  }
+  return null;
+};
+
+const validateBooleanField = (value: any, fieldName: string): string | null => {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const str = String(value).trim().toLowerCase();
+  const validValues = ['yes', 'no', 'true', 'false', '1', '0'];
+  if (!validValues.includes(str)) {
+    return `Invalid ${fieldName}: ${value}. Must be Yes/No, True/False, or 1/0`;
+  }
+  return null;
+};
+
+const validateSelectField = (value: any, fieldName: string, options: string[]): string | null => {
+  if (!value || String(value).trim() === '') return null;
+  const val = String(value).trim();
+  if (!options.includes(val)) {
+    return `Invalid ${fieldName}: ${val}. Must be one of: ${options.join(', ')}`;
+  }
+  return null;
+};
 
 const toNumber = (value: any): number | undefined => {
   if (value === undefined || value === null || value === '') return undefined;
@@ -73,18 +181,23 @@ const normalizePropertyAgeValue = (value: any): string | undefined => {
   return undefined;
 };
 
-const normalizeFacingDirection = (value: any): string | undefined => {
-  const strRaw = normalizeEnumValue(value);
-  if (!strRaw) return undefined;
-  const str = strRaw.toLowerCase().replace(/\s+/g, '').replace(/[–—-]/g, '-');
-  if (['north', 'n'].includes(str)) return 'North';
-  if (['south', 's'].includes(str)) return 'South';
-  if (['east', 'e'].includes(str)) return 'East';
-  if (['west', 'w'].includes(str)) return 'West';
-  if (['north-east', 'northeast', 'ne'].includes(str)) return 'North-East';
-  if (['north-west', 'northwest', 'nw'].includes(str)) return 'North-West';
-  if (['south-east', 'southeast', 'se'].includes(str)) return 'South-East';
-  if (['south-west', 'southwest', 'sw'].includes(str)) return 'South-West';
+const normalizeBooleanValue = (value: any): number | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const str = String(value).trim().toLowerCase();
+
+  // Handle numeric values
+  if (str === '0' || str === '1') {
+    return Number(str);
+  }
+
+  // Handle boolean text representations
+  if (['yes', 'true', 'y', '1', 'on', 'enabled', 'active'].includes(str)) {
+    return 1;
+  }
+  if (['no', 'false', 'n', '0', 'off', 'disabled', 'inactive'].includes(str)) {
+    return 0;
+  }
+
   return undefined;
 };
 
@@ -151,256 +264,292 @@ export async function POST(req: Request) {
     await connectDB();
     const body = await req.json();
     const rows = body?.rows;
-    const stopOnError = body?.stopOnError === true;
 
-    console.log('Bulk upload request received:', { rowsCount: rows?.length, stopOnError });
+    console.log('Bulk upload request received:', { rowsCount: rows?.length });
 
     if (!Array.isArray(rows)) {
-      console.error('Invalid data format - rows is not an array');
       return NextResponse.json({ error: 'Invalid data format. Expected rows array.' }, { status: 400 });
     }
 
-    const categoryList = await Category.find({ status: 1 }).lean();
+    // Load reference data
+    const categories = await Category.find({ status: 1 }).lean();
     const teamMembers = await TeamMember.find({ status: 'Active' }).lean();
+    const cities = await Property.distinct('city').lean();
 
-    console.log('Loaded data:', { categories: categoryList.length, teamMembers: teamMembers.length });
-    console.log('Categories:', categoryList.map(c => c.name));
-
-    const categoryMap = new Map<string, any>();
-    categoryList.forEach((cat) => categoryMap.set(String(cat.name).toLowerCase(), cat));
-
-    const agentMap = new Map<string, any>();
-    teamMembers.forEach((m) => {
-      if (m.fullName) agentMap.set(String(m.fullName).toLowerCase(), m);
-      if (m.email) agentMap.set(String(m.email).toLowerCase(), m);
+    console.log('Loaded reference data:', {
+      categories: categories.length,
+      teamMembers: teamMembers.length,
+      cities: cities.length
     });
 
+    const processedRows: ProcessedRow[] = [];
     const validEntries: any[] = [];
-    const errors: Array<{ row: number; errors: string[]; data: any }> = [];
 
+    // Process each row
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index] || {};
-      const rowErrors: string[] = [];
+      const rowNumber = index + 1;
+      const errors: ValidationError[] = [];
 
-      console.log(`Processing row ${index + 1}:`, row);
+      console.log(`Processing row ${rowNumber}:`, row);
 
+      // Extract and validate fields
       const title = toString(getFieldValue(row, 'title'));
       const categoryName = toString(getFieldValue(row, 'category'));
       const listingPurpose = toString(resolveField(row, ['listingPurpose', 'listingpurpose', 'listing purpose', 'purpose']));
+      const pricingTypeRaw = resolveField(row, ['pricingType', 'pricingtype', 'pricing type']);
+      const pricingType = toString(pricingTypeRaw) || 'fixed';
       const price = toNumber(getFieldValue(row, 'price'));
       const minPrice = toNumber(getFieldValue(row, 'minPrice'));
       const maxPrice = toNumber(getFieldValue(row, 'maxPrice'));
-      const pricingTypeRaw = resolveField(row, ['pricingType', 'pricingtype', 'pricing type']);
-      const pricingType = toString(pricingTypeRaw) || (price !== undefined ? 'fixed' : ((minPrice !== undefined || maxPrice !== undefined) ? 'range' : 'fixed'));
       const priceType = toString(resolveField(row, ['priceType', 'pricetype', 'price type'])) || 'Total Price';
       const city = toString(getFieldValue(row, 'city'));
       const locality = toString(getFieldValue(row, 'locality'));
-      const assignedAgentValue = toString(resolveField(row, ['assignedAgent', 'assignedagent', 'assigned agent', 'agent', 'agentname']));
+      const address = toString(getFieldValue(row, 'address'));
+      const mapLink = toString(getFieldValue(row, 'mapLink'));
+      const area = toNumber(getFieldValue(row, 'area'));
+      const furnishing = toString(getFieldValue(row, 'furnishing'));
+      const propertyAge = toString(getFieldValue(row, 'propertyAge'));
+      const facing = toString(getFieldValue(row, 'facing'));
+      const highlights = toArray(getFieldValue(row, 'highlights'));
+      const amenities = toArray(getFieldValue(row, 'amenities'));
+      const images = toArray(getFieldValue(row, 'images'));
+      const videos = toArray(getFieldValue(row, 'videos'));
+      const documents = toArray(getFieldValue(row, 'documents'));
+      const videoLink = toString(getFieldValue(row, 'videoLink'));
+      const availabilityRaw = resolveField(row, ['availability', 'isAvailable', 'is-available', 'is available']);
+      const assignedAgentRaw = resolveField(row, ['assignedAgent', 'assigned-agent', 'assigned agent', 'agent']);
+      const siteVisitAllowedRaw = resolveField(row, ['siteVisitAllowed', 'site-visit-allowed', 'site visit allowed']);
+      const visitTimings = toString(getFieldValue(row, 'visitTimings'));
 
+      // Validate required fields
+      const titleError = validateRequired(title, 'Title');
+      if (titleError) errors.push({ row: rowNumber, field: 'title', value: title, error: titleError });
 
-      if (!title) rowErrors.push('title is required');
-      if (!categoryName) rowErrors.push('category is required');
-      if (!listingPurpose) rowErrors.push('listingPurpose is required');
-      if (!priceType) rowErrors.push('priceType is required');
-      if (!city) rowErrors.push('city is required');
-      if (!locality) rowErrors.push('locality is required');
+      const categoryError = validateCategory(categoryName, categories);
+      if (categoryError) errors.push({ row: rowNumber, field: 'category', value: categoryName, error: categoryError });
 
-      const category = categoryName ? categoryMap.get(categoryName.toLowerCase()) : null;
-      console.log(`Row ${index + 1} category lookup:`, { categoryName, categoryFound: !!category, availableCategories: Array.from(categoryMap.keys()) });
-      if (!category) {
-        rowErrors.push(`category '${categoryName}' not found`);
-      }
+      const listingPurposeError = validateListingPurpose(listingPurpose);
+      if (listingPurposeError) errors.push({ row: rowNumber, field: 'listingPurpose', value: listingPurpose, error: listingPurposeError });
 
-      // More flexible pricing validation
-      if (pricingType === 'fixed') {
-        if (price === undefined || price === null) {
-          rowErrors.push('price is required for fixed pricing');
-        } else if (price !== undefined && price <= 0) {
-          rowErrors.push('price must be greater than 0');
+      const pricingTypeError = validatePricingType(pricingType);
+      if (pricingTypeError) errors.push({ row: rowNumber, field: 'pricingType', value: pricingType, error: pricingTypeError });
+
+      const priceFieldsError = validatePriceFields(pricingType, price, minPrice, maxPrice);
+      if (priceFieldsError) errors.push({ row: rowNumber, field: 'price', value: { price, minPrice, maxPrice }, error: priceFieldsError });
+
+      const localityError = validateRequired(locality, 'Locality');
+      if (localityError) errors.push({ row: rowNumber, field: 'locality', value: locality, error: localityError });
+
+      // Validate optional fields
+      const agentError = validateAgent(assignedAgentRaw, teamMembers);
+      if (agentError) errors.push({ row: rowNumber, field: 'assignedAgent', value: assignedAgentRaw, error: agentError });
+
+      const availabilityError = validateBooleanField(availabilityRaw, 'Availability');
+      if (availabilityError) errors.push({ row: rowNumber, field: 'availability', value: availabilityRaw, error: availabilityError });
+
+      const siteVisitError = validateBooleanField(siteVisitAllowedRaw, 'Site Visit Allowed');
+      if (siteVisitError) errors.push({ row: rowNumber, field: 'siteVisitAllowed', value: siteVisitAllowedRaw, error: siteVisitError });
+
+      // Validate select fields
+      const furnishingOptions = ['Furnished', 'Semi-Furnished', 'Unfurnished'];
+      const furnishingError = validateSelectField(furnishing, 'Furnishing', furnishingOptions);
+      if (furnishingError) errors.push({ row: rowNumber, field: 'furnishing', value: furnishing, error: furnishingError });
+
+      const propertyAgeOptions = ['Under Construction', 'New (0–1 years)', '1–5 years', '5–10 years', '10+ years'];
+      const propertyAgeError = validateSelectField(propertyAge, 'Property Age', propertyAgeOptions);
+      if (propertyAgeError) errors.push({ row: rowNumber, field: 'propertyAge', value: propertyAge, error: propertyAgeError });
+
+      const facingOptions = ['North', 'South', 'East', 'West', 'Northeast', 'Northwest', 'Southeast', 'Southwest'];
+      const facingError = validateSelectField(facing, 'Facing', facingOptions);
+      if (facingError) errors.push({ row: rowNumber, field: 'facing', value: facing, error: facingError });
+
+      const priceTypeOptions = ['Total Price', 'Price per Sq.Ft'];
+      const priceTypeError = validateSelectField(priceType, 'Price Type', priceTypeOptions);
+      if (priceTypeError) errors.push({ row: rowNumber, field: 'priceType', value: priceType, error: priceTypeError });
+
+      // If no errors, create property document
+      if (errors.length === 0) {
+        const propertyDoc: any = {
+          title: title!,
+          category: categoryName!,
+          listingPurpose: listingPurpose!,
+          pricingType,
+          priceType,
+          city: city || '',
+          locality: locality!,
+          status: 1,
+          createdBy: null, // Will be set by auth middleware if available
+          highlights: highlights.length > 0 ? highlights : [],
+          amenities: amenities.length > 0 ? amenities : [],
+          images: images.length > 0 ? images : [],
+          videos: videos.length > 0 ? videos : [],
+          documents: documents.length > 0 ? documents : [],
+        };
+
+        // Add pricing fields
+        if (pricingType === 'fixed' && price) {
+          propertyDoc.price = price;
+        } else if (pricingType === 'range' && minPrice && maxPrice) {
+          propertyDoc.minPrice = minPrice;
+          propertyDoc.maxPrice = maxPrice;
         }
-      } else if (pricingType === 'range') {
-        if (minPrice === undefined || minPrice === null) {
-          rowErrors.push('minPrice is required for range pricing');
-        } else if (minPrice !== undefined && minPrice <= 0) {
-          rowErrors.push('minPrice must be greater than 0');
-        }
-        if (maxPrice === undefined || maxPrice === null) {
-          rowErrors.push('maxPrice is required for range pricing');
-        } else if (maxPrice !== undefined && maxPrice <= 0) {
-          rowErrors.push('maxPrice must be greater than 0');
-        }
-        if (minPrice !== undefined && maxPrice !== undefined && minPrice >= maxPrice) {
-          rowErrors.push('minPrice must be less than maxPrice');
-        }
-      }
 
-      let assignedAgentId: string | undefined;
-      if (assignedAgentValue) {
-        const agent = agentMap.get(assignedAgentValue.toLowerCase());
-        if (!agent) {
-          // For bulk upload, make agent assignment optional - don't fail if agent not found
-          console.warn(`Agent '${assignedAgentValue}' not found, skipping agent assignment`);
-        } else {
-          assignedAgentId = agent._id;
-        }
-      }
+        // Add optional fields
+        if (address) propertyDoc.address = address;
+        if (mapLink) propertyDoc.mapLink = mapLink;
+        if (area) propertyDoc.area = area;
+        if (furnishing) propertyDoc.furnishing = furnishing;
+        if (propertyAge) propertyDoc.propertyAge = propertyAge;
+        if (facing) propertyDoc.facing = facing;
+        if (videoLink) propertyDoc.videoLink = videoLink;
+        if (visitTimings) propertyDoc.visitTimings = visitTimings;
 
-      if (category?.fields && Array.isArray(category.fields)) {
-        category.fields.forEach((field: any) => {
-          if (!field.required) return;
-          const fieldValue = getDynamicFieldValue(row, field);
-          if (fieldValue === undefined || fieldValue === null || String(fieldValue).trim() === '') {
-            rowErrors.push(`dynamic field '${field.label || field.name}' is required`);
+        // Handle boolean fields
+        const availability = normalizeBooleanValue(availabilityRaw);
+        propertyDoc.availability = availability !== undefined ? availability === 1 : true;
+
+        const siteVisitAllowed = normalizeBooleanValue(siteVisitAllowedRaw);
+        if (siteVisitAllowed !== undefined) propertyDoc.siteVisitAllowed = siteVisitAllowed === 1;
+
+        // Handle agent assignment
+        if (assignedAgentRaw) {
+          const agent = teamMembers.find(a =>
+            a.fullName.toLowerCase() === String(assignedAgentRaw).toLowerCase() ||
+            a.email.toLowerCase() === String(assignedAgentRaw).toLowerCase()
+          );
+          if (agent) propertyDoc.assignedAgentId = agent._id;
+        }
+
+        // Add category-specific fields
+        const category = categories.find(cat => cat.name.toLowerCase() === categoryName!.toLowerCase());
+        if (category) {
+          // Add dynamic fields from category configuration
+          if (category.fields) {
+            category.fields.forEach((field: any) => {
+              const fieldValue = getDynamicFieldValue(row, field);
+              if (fieldValue !== undefined && fieldValue !== null && String(fieldValue).trim() !== '') {
+                if (!propertyDoc.dynamicData) propertyDoc.dynamicData = {};
+                propertyDoc.dynamicData[field.name] = fieldValue;
+              }
+            });
           }
-        });
-      }
 
-      if (rowErrors.length > 0) {
-        errors.push({ row: index + 2, errors: rowErrors, data: row }); // +2 for header
-        console.log(`Row ${index + 1} failed validation:`, rowErrors);
-        if (stopOnError) break;
-        continue;
-      }
-
-      console.log(`Row ${index + 1} passed validation, processing...`);
-
-      const dynamicData: any = {};
-      if (category?.fields && Array.isArray(category.fields)) {
-        category.fields.forEach((field: any) => {
-          const value = getDynamicFieldValue(row, field);
-          if (value !== undefined && value !== null && String(value).trim() !== '') {
-            if (field.type === 'number') {
-              dynamicData[field.name] = toNumber(value);
-            } else if (field.type === 'checkbox') {
-              dynamicData[field.name] = toBoolean(value);
-            } else {
-              dynamicData[field.name] = toString(value);
-            }
+          // Handle specific category fields
+          switch (category.name.toLowerCase()) {
+            case 'flat/apartment':
+              const bhkType = toString(resolveField(row, ['bhkType', 'bhk-type', 'bhk type']));
+              const floorNumber = toNumber(resolveField(row, ['propertyFloorNumber', 'floorNumber', 'floor-number']));
+              const totalFloors = toNumber(resolveField(row, ['totalFloorsInBuilding', 'totalFloors', 'total-floors']));
+              if (bhkType) propertyDoc.bhkType = bhkType;
+              if (floorNumber !== undefined) propertyDoc.propertyFloorNumber = floorNumber;
+              if (totalFloors !== undefined) propertyDoc.totalFloorsInBuilding = totalFloors;
+              break;
+            case 'villa/house':
+              const bedrooms = toNumber(getFieldValue(row, 'bedrooms'));
+              const numberOfFloors = toNumber(resolveField(row, ['numberOfFloors', 'floors']));
+              const plotArea = toNumber(getFieldValue(row, 'plotArea'));
+              if (bedrooms !== undefined) propertyDoc.bedrooms = bedrooms;
+              if (numberOfFloors !== undefined) propertyDoc.numberOfFloors = numberOfFloors;
+              if (plotArea !== undefined) propertyDoc.plotArea = plotArea;
+              break;
+            case 'plot/land':
+              const plotAreaLand = toNumber(getFieldValue(row, 'plotArea'));
+              if (plotAreaLand !== undefined) propertyDoc.plotArea = plotAreaLand;
+              break;
+            case 'commercial':
+              const commercialType = toString(resolveField(row, ['commercialType', 'commercial-type']));
+              const commercialFloor = toNumber(getFieldValue(row, 'floorNumber'));
+              if (commercialType) propertyDoc.commercialType = commercialType;
+              if (commercialFloor !== undefined) propertyDoc.floorNumber = commercialFloor;
+              break;
+            case 'other':
+              const description = toString(resolveField(row, ['propertyDescription', 'description']));
+              if (description) propertyDoc.propertyDescription = description;
+              break;
           }
-        });
+
+          // Handle vastu complaint for all categories
+          const vastuValue = resolveField(row, ['vastuComplaint', 'vastu-complaint', 'vastu complaint']);
+          const normalizedVastu = normalizeBooleanValue(vastuValue);
+          if (normalizedVastu !== undefined) propertyDoc.vastuComplaint = normalizedVastu;
+        }
+
+        validEntries.push(propertyDoc);
       }
 
-      console.log(`Row ${index + 1} dynamic data:`, dynamicData);
-
-      const propertyDoc: any = {
-        title,
-        category: categoryName,
-        listingPurpose,
-        pricingType: pricingType as 'fixed' | 'range',
-        priceType,
-        city,
-        locality,
-        status: 1,
-        dynamicData,
-      };
-
-      // Add optional fields only if they have valid values
-      if (pricingType === 'fixed' && price !== undefined && price !== null && price > 0) {
-        propertyDoc.price = price;
-      }
-      if (pricingType === 'range') {
-        if (minPrice !== undefined && minPrice !== null && minPrice > 0) propertyDoc.minPrice = minPrice;
-        if (maxPrice !== undefined && maxPrice !== null && maxPrice > 0) propertyDoc.maxPrice = maxPrice;
-      }
-
-      if (toString(getFieldValue(row, 'address'))) propertyDoc.address = toString(getFieldValue(row, 'address'));
-      if (toString(resolveField(row, ['mapLink', 'map-link', 'map link', 'googleMapsLink', 'google-maps-link', 'google maps link']))) propertyDoc.mapLink = toString(resolveField(row, ['mapLink', 'map-link', 'map link', 'googleMapsLink', 'google-maps-link', 'google maps link']));
-      if (toNumber(resolveField(row, ['propertyArea', 'property-area', 'property area', 'area'])) !== undefined) propertyDoc.area = toNumber(resolveField(row, ['propertyArea', 'property-area', 'property area', 'area']));
-      const furnishingRaw = resolveField(row, ['furnishingStatus', 'furnishing-status', 'furnishing status', 'furnishing', 'furnishingType', 'furnishing-type', 'furnishing type']);
-      const normalizedFurnishing = normalizeFurnishingStatus(furnishingRaw);
-      if (normalizedFurnishing) {
-        propertyDoc.furnishing = normalizedFurnishing;
-      } else if (furnishingRaw !== undefined && furnishingRaw !== null && String(furnishingRaw).trim() !== '') {
-        propertyDoc.furnishing = String(furnishingRaw).trim();
-      }
-
-      const propertyAgeRaw = resolveField(row, ['propertyAge', 'property-age', 'property age', 'age']);
-      const normalizedPropertyAge = normalizePropertyAgeValue(propertyAgeRaw);
-      if (normalizedPropertyAge) {
-        propertyDoc.propertyAge = normalizedPropertyAge;
-      } else if (propertyAgeRaw !== undefined && propertyAgeRaw !== null && String(propertyAgeRaw).trim() !== '') {
-        propertyDoc.propertyAge = String(propertyAgeRaw).trim();
-      }
-
-      const facingRaw = resolveField(row, ['facingDirection', 'facing-direction', 'facing direction', 'facing']);
-      const normalizedFacing = normalizeFacingDirection(facingRaw);
-      if (normalizedFacing) {
-        propertyDoc.facing = normalizedFacing;
-      } else if (facingRaw !== undefined && facingRaw !== null && String(facingRaw).trim() !== '') {
-        propertyDoc.facing = String(facingRaw).trim();
-      }
-      if (toArray(getFieldValue(row, 'highlights')).length > 0) propertyDoc.highlights = toArray(getFieldValue(row, 'highlights'));
-      if (toArray(getFieldValue(row, 'amenities')).length > 0) propertyDoc.amenities = toArray(getFieldValue(row, 'amenities'));
-      if (toArray(resolveField(row, ['imageUrls', 'image-urls', 'image urls', 'images'])).length > 0) propertyDoc.images = toArray(resolveField(row, ['imageUrls', 'image-urls', 'image urls', 'images']));
-      if (toArray(resolveField(row, ['videoUrls', 'video-urls', 'video urls', 'videos'])).length > 0) propertyDoc.videos = toArray(resolveField(row, ['videoUrls', 'video-urls', 'video urls', 'videos']));
-      if (toArray(resolveField(row, ['documentUrls', 'document-urls', 'document urls', 'documents'])).length > 0) propertyDoc.documents = toArray(resolveField(row, ['documentUrls', 'document-urls', 'document urls', 'documents']));
-      if (toString(resolveField(row, ['videoTourLink', 'video-tour-link', 'video tour link', 'videoLink', 'video-link', 'video link']))) propertyDoc.videoLink = toString(resolveField(row, ['videoTourLink', 'video-tour-link', 'video tour link', 'videoLink', 'video-link', 'video link']));
-      if (toBoolean(resolveField(row, ['isAvailable', 'is-available', 'is available', 'available'])) !== undefined) propertyDoc.availability = toBoolean(resolveField(row, ['isAvailable', 'is-available', 'is available', 'available']));
-      if (assignedAgentId) propertyDoc.assignedAgentId = assignedAgentId;
-      if (toBoolean(resolveField(row, ['siteVisitAllowed', 'site-visit-allowed', 'site visit allowed', 'sitevisit'])) !== undefined) propertyDoc.siteVisitAllowed = toBoolean(resolveField(row, ['siteVisitAllowed', 'site-visit-allowed', 'site visit allowed', 'sitevisit']));
-      if (toString(getFieldValue(row, 'visitTimings'))) propertyDoc.visitTimings = toString(getFieldValue(row, 'visitTimings'));
-
-      // Add category-specific fields
-      if (toString(resolveField(row, ['bhkType', 'bhk-type', 'bhk type', 'bhk']))) propertyDoc.bhkType = toString(resolveField(row, ['bhkType', 'bhk-type', 'bhk type', 'bhk']));
-      if (toNumber(resolveField(row, ['propertyFloorNumber', 'property-floor-number', 'property floor number', 'floorNumber', 'floor-number', 'floor number', 'floor'])) !== undefined) propertyDoc.propertyFloorNumber = toNumber(resolveField(row, ['propertyFloorNumber', 'property-floor-number', 'property floor number', 'floorNumber', 'floor-number', 'floor number', 'floor']));
-      if (toNumber(resolveField(row, ['totalFloorsInBuilding', 'total-floors-in-building', 'total floors in building', 'totalFloors', 'total-floors', 'total floors'])) !== undefined) propertyDoc.totalFloorsInBuilding = toNumber(resolveField(row, ['totalFloorsInBuilding', 'total-floors-in-building', 'total floors in building', 'totalFloors', 'total-floors', 'total floors']));
-      if (toNumber(getFieldValue(row, 'bedrooms')) !== undefined) propertyDoc.bedrooms = toNumber(getFieldValue(row, 'bedrooms'));
-      if (toNumber(resolveField(row, ['numberOfFloors', 'number-of-floors', 'number of floors', 'floors'])) !== undefined) propertyDoc.numberOfFloors = toNumber(resolveField(row, ['numberOfFloors', 'number-of-floors', 'number of floors', 'floors']));
-      if (toNumber(resolveField(row, ['plotArea', 'plot-area', 'plot area'])) !== undefined) propertyDoc.plotArea = toNumber(resolveField(row, ['plotArea', 'plot-area', 'plot area']));
-      if (toString(resolveField(row, ['commercialType', 'commercial-type', 'commercial type', 'commercial']))) propertyDoc.commercialType = toString(resolveField(row, ['commercialType', 'commercial-type', 'commercial type', 'commercial']));
-      if (toNumber(getFieldValue(row, 'floorNumber')) !== undefined) propertyDoc.floorNumber = toNumber(getFieldValue(row, 'floorNumber'));
-      if (toString(resolveField(row, ['propertyDescription', 'property-description', 'property description', 'description']))) propertyDoc.propertyDescription = toString(resolveField(row, ['propertyDescription', 'property-description', 'property description', 'description']));
-      const vastuValue = resolveField(row, ['vastuComplaint', 'vastu-complaint', 'vastu complaint', 'vastu']);
-      if (vastuValue !== undefined && vastuValue !== null && vastuValue !== '') {
-        const parsedVastu = Number(vastuValue);
-        if (parsedVastu === 0 || parsedVastu === 1) propertyDoc.vastuComplaint = parsedVastu;
-      }
-
-      console.log(`Row ${index + 1} final property doc:`, propertyDoc);
-
-      validEntries.push(propertyDoc);
+      processedRows.push({
+        rowNumber,
+        data: row,
+        errors,
+        isValid: errors.length === 0
+      });
     }
 
-    console.log(`Processing complete. Valid entries: ${validEntries.length}, Errors: ${errors.length}`);
-
+    // Insert valid entries
     let insertedCount = 0;
     const insertErrors: Array<{ row: number; error: string }> = [];
 
-    if (validEntries.length > 0) {
-      console.log(`Attempting to insert ${validEntries.length} properties`);
-      console.log('First valid entry keys:', Object.keys(validEntries[0]));
-      
-      for (let i = 0; i < validEntries.length; i++) {
-        console.log(`Creating property ${i + 1}...`);
-        try {
-          const created = await Property.create(validEntries[i]);
-          console.log(`Successfully created property ${i + 1}:`, created._id);
-          insertedCount++;
-        } catch (createError: any) {
-          console.error(`Failed to create property ${i + 1}:`, createError.message);
-          console.error('Property data:', validEntries[i]);
-          insertErrors.push({ row: i + 1, error: createError.message });
-        }
+    for (let i = 0; i < validEntries.length; i++) {
+      try {
+        await Property.create(validEntries[i]);
+        insertedCount++;
+      } catch (createError: any) {
+        const rowNumber = processedRows.find(p => p.isValid && validEntries.indexOf(p.data) === -1)?.rowNumber || (i + 1);
+        insertErrors.push({ row: rowNumber, error: createError.message });
       }
     }
 
-    console.log('Bulk upload completed:', { inserted: insertedCount, failed: errors.length, insertErrors: insertErrors.length, totalRows: rows.length, validEntriesCount: validEntries.length });
+    // Generate error report if there are errors
+    let errorReportBuffer: Buffer | null = null;
+    const allErrors = processedRows.filter(p => !p.isValid).concat(
+      insertErrors.map(e => ({
+        rowNumber: e.row,
+        data: {},
+        errors: [{ row: e.row, field: 'Database Insert', value: '', error: e.error }],
+        isValid: false
+      }))
+    );
 
-    return NextResponse.json({
+    if (allErrors.length > 0) {
+      const errorData = allErrors.map(error => ({
+        'Row Number': error.rowNumber,
+        'Field Name': (error.errors || []).map(e => e.field).join('; '),
+        'Wrong Value': (error.errors || []).map(e => String(e.value)).join('; '),
+        'Error Reason': (error.errors || []).map(e => e.error).join('; ')
+      }));
+
+      const errorWb = XLSX.utils.book_new();
+      const errorWs = XLSX.utils.json_to_sheet(errorData);
+      XLSX.utils.book_append_sheet(errorWb, errorWs, 'Errors');
+      errorReportBuffer = XLSX.write(errorWb, { type: 'buffer', bookType: 'xlsx' });
+    }
+
+    const response: any = {
+      success: insertedCount > 0,
       inserted: insertedCount,
-      failed: errors.length,
-      errors,
-      insertErrors,
+      failed: allErrors.length,
       totalRows: rows.length,
-      debug: {
-        validEntriesCount: validEntries.length,
-        categoriesLoaded: categoryList.length,
-        teamMembersLoaded: teamMembers.length
-      }
-    }, { status: 200 });
+      errors: allErrors.map(e => ({
+        row: e.rowNumber,
+        field: (e.errors || []).map(err => err.field).join(', '),
+        value: (e.errors || []).map(err => err.value).join(', '),
+        error: (e.errors || []).map(err => err.error).join('; ')
+      }))
+    };
+
+    if (errorReportBuffer) {
+      response.errorReport = errorReportBuffer.toString('base64');
+      response.hasErrorReport = true;
+    }
+
+    return NextResponse.json(response, { status: 200 });
+
   } catch (err: any) {
     console.error('Bulk property upload error:', err);
-    console.error('Error stack:', err.stack);
-    return NextResponse.json({ error: 'Bulk upload failed. Please check your file and try again.', details: err.message }, { status: 500 });
+    return NextResponse.json({
+      error: 'Bulk upload failed. Please check your file and try again.',
+      details: err.message
+    }, { status: 500 });
   }
 }

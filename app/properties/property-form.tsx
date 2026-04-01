@@ -78,6 +78,8 @@ export default function PropertyForm({ }: PropertyFormProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoadingForm, setIsLoadingForm] = useState(isEditMode); // Show loader during edit form load
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
+  const [cities, setCities] = useState<string[]>([]);
+  const [isCitiesLoading, setIsCitiesLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [isTeamMembersLoading, setIsTeamMembersLoading] = useState(true);
   const [newProp, setNewProp] = useState<PropertyFormState>({
@@ -100,7 +102,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
     existingVideos: [],
     existingDocuments: [],
     assignedAgentId: '',
-    siteVisitAllowed: false,
+    siteVisitAllowed: undefined,
     visitTimings: '',
     vastuComplaint: undefined,
     dynamicData: {},
@@ -141,12 +143,38 @@ export default function PropertyForm({ }: PropertyFormProps) {
   }, []);
 
   useEffect(() => {
+    const fetchCities = async () => {
+      try {
+        const res = await fetch('/api/properties');
+        const data = await res.json();
+
+        if (res.ok && Array.isArray(data.properties)) {
+          const uniqueCitiesArray = Array.from(
+            new Set(
+              data.properties
+                .map((p: any) => String(p.city || '').trim())
+                .filter((city: string) => city !== '')
+            )
+          );
+
+          const uniqueCities = (uniqueCitiesArray as string[]).sort((a, b) => a.localeCompare(b));
+          setCities(uniqueCities);
+        } else {
+          setCities([]);
+        }
+      } catch (error) {
+        console.error('Failed to load cities:', error);
+        setCities([]);
+      } finally {
+        setIsCitiesLoading(false);
+      }
+    };
+
     const fetchTeamMembers = async () => {
       try {
         const res = await fetch('/api/team-members');
         const data = await res.json();
         if (res.ok && data.teamMembers && Array.isArray(data.teamMembers)) {
-          // Filter for active team members
           const activeMembers = data.teamMembers.filter((member: any) => member.status === 'Active');
           setTeamMembers(activeMembers);
           console.log('Loaded team members:', activeMembers);
@@ -162,6 +190,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
       }
     };
 
+    fetchCities();
     fetchTeamMembers();
   }, []);
 
@@ -225,7 +254,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
             videoTourLink: prop.videoLink || undefined,
             vastuComplaint: prop.vastuComplaint ?? undefined,
             assignedAgentId: prop.assignedAgentId || '',
-            siteVisitAllowed: prop.siteVisitAllowed || false,
+            siteVisitAllowed: prop.siteVisitAllowed ?? undefined,
             visitTimings: prop.visitTimings || '',
             dynamicData: prop.dynamicData || {},
           });
@@ -1731,7 +1760,7 @@ export default function PropertyForm({ }: PropertyFormProps) {
                                   setNewProp({
                                     ...newProp,
                                     siteVisitAllowed: e.target.value === 'true',
-                                    visitTimings: e.target.value === 'false' ? '' : newProp.visitTimings
+                                    visitTimings: e.target.value === 'false' ? '' : newProp.visitTimings,
                                   })
                                 }
                                 className="w-4 h-4 accent-indigo-600"
@@ -1740,11 +1769,6 @@ export default function PropertyForm({ }: PropertyFormProps) {
                             </label>
                           ))}
                         </div>
-                        {errors.siteVisitAllowed && (
-                          <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
-                            <AlertCircle size={12} /> {errors.siteVisitAllowed}
-                          </p>
-                        )}
                       </div>
 
                       {/* Visit Timings - Only show if site visit is allowed */}
