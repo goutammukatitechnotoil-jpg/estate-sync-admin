@@ -331,23 +331,6 @@ export default function PropertyDetailPage() {
                       {selectedProperty.vastuComplaint !== undefined && <div><p className="text-xs font-bold text-gray-400 uppercase">Vastu Complaint</p><p className="font-semibold text-gray-800">{selectedProperty.vastuComplaint === 1 ? 'Yes' : selectedProperty.vastuComplaint === 0 ? 'No' : 'Not Specified'}</p></div>}
                     </div>
 
-                    {/* Dynamic Fields */}
-                    {selectedProperty.dynamicData && Object.keys(selectedProperty.dynamicData).length > 0 && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-3">Additional Details</p>
-                        <div className="grid grid-cols-2 gap-4">
-                          {Object.entries(selectedProperty.dynamicData).map(([key, value]) => {
-                            if (value === undefined || value === null || value === '') return null;
-                            return (
-                              <div key={key}>
-                                <p className="text-xs font-bold text-gray-400 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                                <p className="font-semibold text-gray-800">{Array.isArray(value) ? value.join(', ') : String(value)}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 

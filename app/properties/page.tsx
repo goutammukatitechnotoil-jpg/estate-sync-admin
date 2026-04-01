@@ -8,7 +8,8 @@ import {
   CheckCircle2, AlertCircle,
   BarChart3, PieChart as PieChartIcon,
   ChevronRight, Phone, Clock, Filter, SlidersHorizontal,
-  Home, Building, Activity, Settings, LogOut, Layers
+  Home, Building, Activity, Settings, LogOut, Layers,
+  UploadCloud
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 
@@ -184,13 +185,22 @@ export default function PropertiesPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Link
-                href="/properties/add"
-                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-100 transition-all active:scale-95 shrink-0"
-              >
-                <Plus size={18} />
-                Add Property
-              </Link>
+              <div className="flex gap-2">
+                <Link
+                  href="/properties/bulk-upload"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95"
+                >
+                  <UploadCloud size={16} />
+                  Bulk Upload
+                </Link>
+                <Link
+                  href="/properties/add"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-100 transition-all active:scale-95 shrink-0"
+                >
+                  <Plus size={18} />
+                  Add Property
+                </Link>
+              </div>
             </div>
           </div>
 

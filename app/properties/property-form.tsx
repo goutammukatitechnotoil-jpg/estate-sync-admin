@@ -16,6 +16,43 @@ interface PropertyFormProps {
   // Removed propertyId prop since we use useParams
 }
 
+const normalizeFurnishingStatus = (value: any): string | undefined => {
+  if (!value && value !== 0) return undefined;
+  const raw = String(value).trim();
+  const x = raw.toLowerCase().replace(/\s+/g, '').replace(/-/g, '');
+  if (['furnished', 'fullyfurnished', 'fully-furnished'].includes(x)) return 'Furnished';
+  if (['semifurnished', 'semifurnished', 'semifurnished', 'semi-furnished'].includes(x)) return 'Semi-Furnished';
+  if (['unfurnished', 'un-furnished'].includes(x)) return 'Unfurnished';
+  return undefined;
+};
+
+const normalizePropertyAge = (value: any): string | undefined => {
+  if (!value && value !== 0) return undefined;
+  const raw = String(value).trim();
+  const x = raw.toLowerCase().replace(/\s+/g, '').replace(/[–—]/g, '-');
+  if (['underconstruction', 'under-construction', 'underconstruction'].includes(x)) return 'Under Construction';
+  if (['new(0-1years)', 'new(0–1years)', 'new', '0-1years', '0–1years', '0to1years'].includes(x)) return 'New (0–1 years)';
+  if (['1-5years', '1–5years', '1to5years', '1to5'].includes(x)) return '1–5 years';
+  if (['5-10years', '5–10years', '5to10years', '5to10'].includes(x)) return '5–10 years';
+  if (['10+years', '10years', '10plusyears', '10+'].includes(x)) return '10+ years';
+  return undefined;
+};
+
+const normalizeFacingDirection = (value: any): string | undefined => {
+  if (!value && value !== 0) return undefined;
+  const raw = String(value).trim();
+  const x = raw.toLowerCase().replace(/\s+/g, '').replace(/[–—]/g, '-');
+  if (['north', 'n'].includes(x)) return 'North';
+  if (['south', 's'].includes(x)) return 'South';
+  if (['east', 'e'].includes(x)) return 'East';
+  if (['west', 'w'].includes(x)) return 'West';
+  if (['north-east', 'northeast', 'ne'].includes(x)) return 'North-East';
+  if (['north-west', 'northwest', 'nw'].includes(x)) return 'North-West';
+  if (['south-east', 'southeast', 'se'].includes(x)) return 'South-East';
+  if (['south-west', 'southwest', 'sw'].includes(x)) return 'South-West';
+  return undefined;
+};
+
 export default function PropertyForm({ }: PropertyFormProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -182,9 +219,9 @@ export default function PropertyForm({ }: PropertyFormProps) {
             address: prop.address || undefined,
             googleMapsLink: prop.mapLink || undefined,
             propertyArea: prop.area || undefined,
-            furnishingStatus: prop.furnishing || undefined,
-            propertyAge: prop.propertyAge || undefined,
-            facingDirection: prop.facing || undefined,
+            furnishingStatus: normalizeFurnishingStatus(prop.furnishing) || (prop.furnishing ? String(prop.furnishing).trim() : undefined),
+            propertyAge: normalizePropertyAge(prop.propertyAge) || (prop.propertyAge ? String(prop.propertyAge).trim() : undefined),
+            facingDirection: normalizeFacingDirection(prop.facing) || (prop.facing ? String(prop.facing).trim() : undefined),
             videoTourLink: prop.videoLink || undefined,
             vastuComplaint: prop.vastuComplaint ?? undefined,
             assignedAgentId: prop.assignedAgentId || '',
@@ -579,6 +616,18 @@ export default function PropertyForm({ }: PropertyFormProps) {
     }
   };
 
+  const normalizeSelectValue = (value: any, options: string[]) => {
+    if (value === undefined || value === null) return '';
+    const str = String(value).trim();
+    if (!str) return '';
+
+    const exactMatch = options.find(opt => opt === str);
+    if (exactMatch !== undefined) return exactMatch;
+
+    const normalized = options.find(opt => String(opt).trim().toLowerCase() === str.toLowerCase());
+    return normalized !== undefined ? normalized : str;
+  };
+
   const renderConditionalFields = () => {
     const selectedCategory = categories.find(c => c.name === newProp.category);
     if (!selectedCategory || !Array.isArray(selectedCategory.fields) || selectedCategory.fields.length === 0) {
@@ -590,7 +639,11 @@ export default function PropertyForm({ }: PropertyFormProps) {
         {selectedCategory.fields.map((field: any, idx: number) => {
           const fieldType = (field.type || '').toLowerCase();
           const options: string[] = Array.isArray(field.options) ? field.options : [];
-          const val = newProp.dynamicData?.[field.name] !== undefined ? newProp.dynamicData[field.name] : '';
+          let val = newProp.dynamicData?.[field.name] !== undefined ? newProp.dynamicData[field.name] : '';
+
+          if (fieldType === 'select' || fieldType === 'radio') {
+            val = normalizeSelectValue(val, options);
+          }
 
           const handleChange = (newVal: any) => {
             setNewProp(prev => ({ ...prev, dynamicData: { ...prev.dynamicData, [field.name]: newVal } }));
