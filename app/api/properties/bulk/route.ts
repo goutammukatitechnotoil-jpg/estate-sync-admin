@@ -339,18 +339,32 @@ export async function POST(req: Request) {
       const priceFieldsError = validatePriceFields(pricingType, price, minPrice, maxPrice);
       if (priceFieldsError) errors.push({ row: rowNumber, field: 'price', value: { price, minPrice, maxPrice }, error: priceFieldsError });
 
+      const cityError = validateRequired(city, 'City');
+      if (cityError) errors.push({ row: rowNumber, field: 'city', value: city, error: cityError });
+
       const localityError = validateRequired(locality, 'Locality');
       if (localityError) errors.push({ row: rowNumber, field: 'locality', value: locality, error: localityError });
 
-      // Validate optional fields
-      const agentError = validateAgent(assignedAgentRaw, teamMembers);
-      if (agentError) errors.push({ row: rowNumber, field: 'assignedAgent', value: assignedAgentRaw, error: agentError });
+      // Validate required agent
+      if (!assignedAgentRaw || String(assignedAgentRaw).trim() === '') {
+        errors.push({ row: rowNumber, field: 'assignedAgent', value: assignedAgentRaw, error: 'Assigned Agent is required' });
+      } else {
+        const agentError = validateAgent(assignedAgentRaw, teamMembers);
+        if (agentError) errors.push({ row: rowNumber, field: 'assignedAgent', value: assignedAgentRaw, error: agentError });
+      }
 
       const availabilityError = validateBooleanField(availabilityRaw, 'Availability');
       if (availabilityError) errors.push({ row: rowNumber, field: 'availability', value: availabilityRaw, error: availabilityError });
 
       const siteVisitError = validateBooleanField(siteVisitAllowedRaw, 'Site Visit Allowed');
       if (siteVisitError) errors.push({ row: rowNumber, field: 'siteVisitAllowed', value: siteVisitAllowedRaw, error: siteVisitError });
+
+      const siteVisitAllowedNormalized = normalizeBooleanValue(siteVisitAllowedRaw);
+      if (siteVisitAllowedNormalized === 1) {
+        if (!visitTimings || String(visitTimings).trim() === '') {
+          errors.push({ row: rowNumber, field: 'visitTimings', value: visitTimings, error: 'Visit Timings is required when Site Visit Allowed is Yes' });
+        }
+      }
 
       // Validate select fields
       const furnishingOptions = ['Furnished', 'Semi-Furnished', 'Unfurnished'];
@@ -513,12 +527,66 @@ export async function POST(req: Request) {
     );
 
     if (allErrors.length > 0) {
-      const errorData = allErrors.map(error => ({
-        'Row Number': error.rowNumber,
-        'Field Name': (error.errors || []).map(e => e.field).join('; '),
-        'Wrong Value': (error.errors || []).map(e => String(e.value)).join('; '),
-        'Error Reason': (error.errors || []).map(e => e.error).join('; ')
-      }));
+      // Define all possible field columns for column-wise error display
+      const fieldColumns = [
+        'Title',
+        'Category',
+        'Listing Purpose',
+        'Configuration Fields',
+        'Pricing Type',
+        'Price (INR)',
+        'Price Type',
+        'City',
+        'Locality / Area',
+        'Full Address',
+        'Google Maps Link',
+        'Property Area (sq ft)',
+        'Vastu Complaint',
+        'Property Age',
+        'Facing Direction',
+        'Highlights / Features (Recommended)',
+        'Amenities (Optional)',
+        'Property Images',
+        'Property Videos',
+        'Property Documents',
+        'Video Tour Link',
+        'Property Availability',
+        'Assigned Agent',
+        'Site Visit Allowed'
+      ];
+
+      // Create error data with column-wise structure
+      const errorData = allErrors.map(error => {
+        const rowData: any = { 'Row Number': error.rowNumber };
+
+        // Initialize all field columns with empty string
+        fieldColumns.forEach(field => {
+          rowData[field] = '';
+        });
+
+        // Fill in error messages for fields that have errors
+        (error.errors || []).forEach(err => {
+          // Map field names to column headers (case-insensitive match)
+          const matchingColumn = fieldColumns.find(col =>
+            col.toLowerCase().includes(err.field.toLowerCase()) ||
+            err.field.toLowerCase().includes(col.toLowerCase().split(' ')[0])
+          );
+
+          if (matchingColumn) {
+            if (rowData[matchingColumn]) {
+              rowData[matchingColumn] += '; ' + err.error;
+            } else {
+              rowData[matchingColumn] = err.error;
+            }
+          } else {
+            // If no match, put in a general 'Other Errors' column
+            if (!rowData['Other Errors']) rowData['Other Errors'] = '';
+            rowData['Other Errors'] += (rowData['Other Errors'] ? '; ' : '') + `${err.field}: ${err.error}`;
+          }
+        });
+
+        return rowData;
+      });
 
       const errorWb = XLSX.utils.book_new();
       const errorWs = XLSX.utils.json_to_sheet(errorData);
@@ -531,12 +599,16 @@ export async function POST(req: Request) {
       inserted: insertedCount,
       failed: allErrors.length,
       totalRows: rows.length,
-      errors: allErrors.map(e => ({
-        row: e.rowNumber,
-        field: (e.errors || []).map(err => err.field).join(', '),
-        value: (e.errors || []).map(err => err.value).join(', '),
-        error: (e.errors || []).map(err => err.error).join('; ')
-      }))
+      errors: allErrors.map(e => {
+        const errorObj: { [key: string]: string } = {};
+        (e.errors || []).forEach(err => {
+          errorObj[err.field] = err.error;
+        });
+        return {
+          row: e.rowNumber,
+          errors: errorObj
+        };
+      })
     };
 
     if (errorReportBuffer) {

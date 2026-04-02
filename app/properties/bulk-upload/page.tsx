@@ -88,6 +88,7 @@ export default function BulkUploadPropertyPage() {
   const [result, setResult] = useState<any>(null);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [rowErrors, setRowErrors] = useState<Record<number, Record<string, string>>>({});
   const [fileName, setFileName] = useState<string>('');
 
   useEffect(() => {
@@ -204,6 +205,8 @@ export default function BulkUploadPropertyPage() {
   const handleConfirmUpload = async () => {
     if (!previewData.length) return;
 
+    let uploadResult: any = null;
+
     try {
       setUploading(true);
       setShowPreview(false);
@@ -219,8 +222,44 @@ export default function BulkUploadPropertyPage() {
       });
 
       const data = await res.json();
+      uploadResult = data;
       console.log('API response:', data);
       setResult(data);
+
+      const normalizeFieldKey = (field: string): string =>
+        String(field || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      const errorMap: Record<number, Record<string, string>> = {};
+      (data.errors || []).forEach((item: any) => {
+        if (!item?.row || !item?.errors || typeof item.errors !== 'object') return;
+
+        const normalizedErrors: Record<string, string> = {};
+        Object.entries(item.errors).forEach(([field, message]) => {
+          const key = normalizeFieldKey(field);
+          const lowerField = String(field || '').toLowerCase();
+
+          normalizedErrors[key] = String(message || '');
+          normalizedErrors[lowerField] = String(message || '');
+
+          // Keep both shorthand and expanded forms to match any preview key style
+          if (key.endsWith('title')) {
+            normalizedErrors['propertytitle'] = normalizedErrors[key];
+          }
+          if (key === 'status' || key === 'availability' || key === 'isavailable') {
+            normalizedErrors['isavailable'] = normalizedErrors[key];
+          }
+
+          if (field.toLowerCase().includes('category')) {
+            normalizedErrors['category'] = normalizedErrors[key];
+          }
+        });
+
+        errorMap[item.row] = {
+          ...(errorMap[item.row] || {}),
+          ...normalizedErrors,
+        };
+      });
+      setRowErrors(errorMap);
 
       if (!res.ok) {
         toast.error(data.error || 'Upload failed.');
@@ -236,6 +275,11 @@ export default function BulkUploadPropertyPage() {
 
         if (failCount > 0) {
           toast.error('Please check the error details below and download the error report for corrections.');
+          setShowPreview(true); // keep preview showing to highlight in table
+        } else {
+          setShowPreview(false);
+          setPreviewData([]);
+          setFileName('');
         }
       }
     } catch (error) {
@@ -243,8 +287,11 @@ export default function BulkUploadPropertyPage() {
       toast.error('Failed to process upload.');
     } finally {
       setUploading(false);
-      setPreviewData([]);
-      setFileName('');
+      // preserve preview when user has validation errors
+      if (!uploadResult?.failed || uploadResult?.failed <= 0) {
+        setPreviewData([]);
+        setFileName('');
+      }
     }
   };
 
@@ -261,20 +308,24 @@ export default function BulkUploadPropertyPage() {
     }
 
     try {
-      // Create error report data
-      const errorData = result.errors.map((error: any) => ({
-        'Row Number': error.row,
-        'Field Name': error.field,
-        'Wrong Value': error.value,
-        'Error Reason': error.error
-      }));
+      const errorData = (result.errors || []).map((error: any) => {
+        const rowObj: Record<string, any> = { 'Row Number': error.row };
+        if (error.errors && typeof error.errors === 'object') {
+          Object.entries(error.errors).forEach(([field, msg]) => {
+            rowObj[field] = msg;
+          });
+        } else if (Array.isArray(error.errors)) {
+          rowObj['Error'] = error.errors.join(', ');
+        } else if (typeof error.error === 'string') {
+          rowObj['Error'] = error.error;
+        }
+        return rowObj;
+      });
 
-      // Create workbook
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(errorData);
       XLSX.utils.book_append_sheet(wb, ws, 'Errors');
 
-      // Download file
       XLSX.writeFile(wb, 'bulk_upload_errors.xlsx');
       toast.success('Error report downloaded');
     } catch (error) {
@@ -395,35 +446,68 @@ export default function BulkUploadPropertyPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-blue-200">
-                      {previewData.slice(0, 5).map((row, index) => (
-                        <tr key={index} className="hover:bg-blue-25">
-                          {Object.keys(row).map((key) => {
-                            const rawValue = String(row[key] || '');
-                            let displayValue = rawValue;
-                            let isBooleanField = false;
+                      {previewData.slice(0, 5).map((row, index) => {
+                        const rowNumber = index + 1;
+                        const rowIssue = rowErrors[rowNumber] || {};
+                        const rowHasError = Object.keys(rowIssue).length > 0;
 
-                            // Check if this is a boolean field and show normalized value
-                            const lowerKey = key.toLowerCase();
-                            if (['isavailable', 'available', 'sitevisitallowed', 'sitevisit', 'vastucomplaint', 'vastu'].includes(lowerKey)) {
-                              const normalized = normalizeBooleanForDisplay(row[key]);
-                              if (normalized !== rawValue) {
-                                displayValue = `${rawValue} → ${normalized}`;
-                                isBooleanField = true;
-                              }
-                            }
+                        const normalizeFieldKey = (field: string): string =>
+                          String(field || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-                            return (
-                              <td
-                                key={key}
-                                className={`px-3 py-2 text-sm max-w-xs truncate ${isBooleanField ? 'text-blue-700 font-medium' : 'text-gray-900'}`}
-                                title={displayValue}
-                              >
-                                {displayValue}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                        const rowErrorSummary = Object.entries(rowIssue)
+                          .map(([field, message]) => `${field}: ${message}`)
+                          .join(' | ');
+
+                        return (
+                          <React.Fragment key={`preview-row-${rowNumber}`}>
+                            <tr
+                              className={`${rowHasError ? 'bg-rose-50' : ''} hover:bg-blue-25`}
+                            >
+                              {Object.keys(row).map((key) => {
+                                const rawValue = String(row[key] || '');
+                                let displayValue = rawValue;
+                                let isBooleanField = false;
+
+                                const lowerKey = key.toLowerCase();
+                                if (['isavailable', 'available', 'sitevisitallowed', 'sitevisit', 'vastucomplaint', 'vastu'].includes(lowerKey)) {
+                                  const normalized = normalizeBooleanForDisplay(row[key]);
+                                  if (normalized !== rawValue) {
+                                    displayValue = `${rawValue} → ${normalized}`;
+                                    isBooleanField = true;
+                                  }
+                                }
+
+                                const keyNorm = normalizeFieldKey(key);
+                                const cellErrorKey = rowIssue[keyNorm] || rowIssue[lowerKey] || rowIssue[lowerKey.replace(/\s|_|-/g, '')];
+                                const fuzzyError = Object.entries(rowIssue).find(([errKey]) => {
+                                  const normalizedErrKey = normalizeFieldKey(errKey);
+                                  return normalizedErrKey === keyNorm || keyNorm.includes(normalizedErrKey) || normalizedErrKey.includes(keyNorm);
+                                });
+                                const cellError = cellErrorKey || (fuzzyError ? fuzzyError[1] : undefined);
+                                const cellClass = cellError ? 'bg-rose-200 text-rose-800 font-semibold' : isBooleanField ? 'text-blue-700 font-medium' : 'text-gray-900';
+
+                                return (
+                                  <td
+                                    key={key}
+                                    className={`px-3 py-2 text-sm max-w-xs truncate ${cellClass}`}
+                                    title={cellError ? `${cellError}` : displayValue}
+                                  >
+                                    {displayValue}
+                                    {cellError && <div className="text-xs text-rose-700">{cellError}</div>}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                            {rowHasError && (
+                              <tr key={`${index}-error`}>
+                                <td colSpan={Object.keys(row).length} className="px-3 py-2 text-xs text-rose-800 bg-rose-100">
+                                  <strong>Row {rowNumber} errors:</strong> {rowErrorSummary}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                       {previewData.length > 5 && (
                         <tr>
                           <td
@@ -465,7 +549,33 @@ export default function BulkUploadPropertyPage() {
                     </button>
                   )}
                 </div>
-                {result.errors?.length > 0 && (
+                {result?.errors?.length > 0 && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+                    <p className="text-sm font-bold text-rose-700">Failed Rows</p>
+                    <ul className="text-xs text-rose-600 list-disc pl-5 mt-2 max-h-52 overflow-auto">
+                      {result.errors.slice(0, 20).map((item: any, idx: number) => {
+                        let message = '';
+                        if (Array.isArray(item.errors)) {
+                          message = item.errors.join(', ');
+                        } else if (item.errors && typeof item.errors === 'object') {
+                          message = Object.entries(item.errors)
+                            .map(([field, value]) => `${field}: ${value}`)
+                            .join(', ');
+                        } else {
+                          message = String(item.errors || 'Unknown error');
+                        }
+
+                        return (
+                          <li key={idx}>Row {item.row}: {message}</li>
+                        );
+                      })}
+                    </ul>
+                    {result.errors.length > 20 && (
+                      <p className="text-xs text-rose-500 mt-2">Only first 20 shown, download full report using button above.</p>
+                    )}
+                  </div>
+                )}
+                {/* {result.errors?.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-semibold text-gray-700 mb-2">Error Details:</p>
                     <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
@@ -482,9 +592,15 @@ export default function BulkUploadPropertyPage() {
                           {result.errors.slice(0, 10).map((error: any, idx: number) => (
                             <tr key={idx} className="border-t border-gray-200">
                               <td className="px-2 py-1">{error.row}</td>
-                              <td className="px-2 py-1 font-medium">{error.field}</td>
-                              <td className="px-2 py-1 text-red-600">{error.value}</td>
-                              <td className="px-2 py-1 text-red-600">{error.error}</td>
+                              <td className="px-2 py-1 font-medium">
+                                {error.field || (error.errors && Object.keys(error.errors).join(', ')) || 'N/A'}
+                              </td>
+                              <td className="px-2 py-1 text-red-600">
+                                {error.value || (error.errors && Object.values(error.errors).join(', ')) || 'N/A'}
+                              </td>
+                              <td className="px-2 py-1 text-red-600">
+                                {error.error || (error.errors && Object.values(error.errors).join(', ')) || 'N/A'}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -494,7 +610,7 @@ export default function BulkUploadPropertyPage() {
                       <p className="text-xs text-gray-500 mt-2">Showing first 10 errors. Download full report for complete details.</p>
                     )}
                   </div>
-                )}
+                )} */}
               </div>
             )}
 
@@ -526,20 +642,6 @@ export default function BulkUploadPropertyPage() {
                 </div>
               ) : (
                 <p className="text-sm text-gray-500">No dynamic fields configured for this category.</p>
-              )}
-            </div>
-          )}
-
-          {result?.errors?.length > 0 && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
-              <p className="text-sm font-bold text-rose-700">Failed Rows</p>
-              <ul className="text-xs text-rose-600 list-disc pl-5 mt-2 max-h-52 overflow-auto">
-                {result.errors.slice(0, 20).map((item: any, idx: number) => (
-                  <li key={idx}>Row {item.row}: {(item.errors || []).join(', ')}</li>
-                ))}
-              </ul>
-              {result.errors.length > 20 && (
-                <p className="text-xs text-rose-500 mt-2">Only first 20 shown, download full report using button above.</p>
               )}
             </div>
           )}
