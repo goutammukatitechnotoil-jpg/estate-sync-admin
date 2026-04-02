@@ -41,7 +41,7 @@ const getStandardFields = (): TemplateField[] => [
   { name: 'documents', label: 'Document URLs (comma-separated)', type: 'text', required: false },
   { name: 'videoLink', label: 'Video Tour Link', type: 'text', required: false },
   { name: 'availability', label: 'Is Available', type: 'boolean', required: true },
-  { name: 'assignedAgent', label: 'Assigned Agent', type: 'select', required: false },
+  { name: 'assignedAgent', label: 'Assigned Agent', type: 'select', required: true },
   { name: 'siteVisitAllowed', label: 'Site Visit Allowed', type: 'boolean', required: false },
   { name: 'visitTimings', label: 'Visit Timings', type: 'text', required: false },
 ];
@@ -93,14 +93,23 @@ export async function GET(request: NextRequest) {
     const categories = await Category.find({ status: 1 }).select('name fields').lean();
     console.log('Found categories:', categories.length);
 
-    // Fetch team members (agents)
+    // Fetch team members (only those with role Agent)
     let teamMembers: any[] = [];
     try {
-      teamMembers = await TeamMember.find({ status: 'Active' })
+      const members = await TeamMember.find({ status: 'Active' })
         .populate('role', 'name')
-        .select('fullName email')
+        .select('fullName email role')
         .lean();
-      console.log('Found team members:', teamMembers.length);
+      teamMembers = (members || [])
+        .filter((m: any) => m.role && String(m.role.name || '').toLowerCase() === 'agent')
+        .map((m: any) => ({ fullName: m.fullName, email: m.email }));
+
+      if (!teamMembers.length) {
+        console.log('No active agent roles found, falling back to default Agent entries');
+        teamMembers = [{ fullName: 'Default Agent', email: 'agent@example.com' }];
+      }
+
+      console.log('Found agent team members:', teamMembers.length);
     } catch (error) {
       console.log('Error fetching team members, using default agents:', error);
       teamMembers = [{ fullName: 'Default Agent', email: 'agent@example.com' }];
@@ -146,6 +155,12 @@ export async function GET(request: NextRequest) {
 
     // Add sample data row
     const sampleRow = allFields.map(field => {
+      // Keep text fields that are CSV lists or URL fields empty to avoid pre-filled values
+      const emptyFields = ['highlights', 'amenities', 'images', 'videos', 'documents', 'mapLink'];
+      if (emptyFields.includes(field.name)) {
+        return '';
+      }
+
       switch (field.type) {
         case 'select':
           return field.options ? field.options[0] : '';

@@ -4,6 +4,7 @@ import Property from '@/lib/models/Property';
 import Category from '@/lib/models/Category';
 import TeamMember from '@/lib/models/TeamMember';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
@@ -551,5 +552,168 @@ export async function POST(req: Request) {
       error: 'Bulk upload failed. Please check your file and try again.',
       details: err.message
     }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    await connectDB();
+
+    const categories = await Category.find({ status: 1 }).lean();
+    const teamMembers = await TeamMember.find({ status: 'Active' }).lean();
+    const cities = await Property.distinct('city').lean();
+
+    const categoryNames = categories.map((cat) => String(cat.name || '').trim()).filter(Boolean);
+    const listingPurpose = ['For Sale', 'For Rent'];
+    const pricingType = ['Fixed Price', 'Range Price'];
+    const priceTypeForSale = ['Total Price', 'Price per Sq.Ft'];
+    const priceTypeForRent = ['Monthly Rent', 'Quarterly Rent'];
+    const vastuOptions = ['Yes', 'No'];
+    const ageOptions = ['Under Construction', 'New (0-1 Years)', '1-5 Years', '5-10 Years', '10+ Years'];
+    const directions = ['East', 'West', 'North', 'South', 'North-East', 'North-West', 'South-East', 'South-West'];
+    const yesNo = ['Yes', 'No'];
+    const agentOptions = teamMembers
+      .map((m) => `${m.fullName || ''}${m.email ? ` (${m.email})` : ''}`)
+      .filter((v) => v);
+
+    const configurationByCategory: { [category: string]: string[] } = {};
+    categories.forEach((cat) => {
+      const key = String(cat.name || '').trim();
+      if (!key) return;
+      const fields = Array.isArray(cat.fields) ? cat.fields.map((f: any) => String(f).trim()).filter(Boolean) : [];
+      configurationByCategory[key] = fields.length ? fields : ['1BHK', '2BHK', '3BHK'];
+    });
+
+    const cityLocalities: { [city: string]: string[] } = {};
+    for (const city of cities) {
+      if (!city) continue;
+      const localities = await Property.distinct('locality', { city }).lean();
+      cityLocalities[String(city).trim()] = (localities || []).map((loc) => String(loc || '').trim()).filter(Boolean);
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Property Template');
+    const listSheet = workbook.addWorksheet('dropdownLists');
+    listSheet.state = 'veryHidden';
+
+    const normalizeName = (value: string) => value.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '');
+
+    const writeList = (col: string, values: string[]) => {
+      values.forEach((value, idx) => {
+        listSheet.getCell(`${col}${idx + 1}`).value = value;
+      });
+      if (!values.length) {
+        listSheet.getCell(`${col}1`).value = 'N/A';
+      }
+    };
+
+    writeList('A', categoryNames);
+    writeList('B', listingPurpose);
+    writeList('C', pricingType);
+    writeList('D', priceTypeForSale);
+    writeList('E', priceTypeForRent);
+    writeList('F', vastuOptions);
+    writeList('G', ageOptions);
+    writeList('H', directions);
+    writeList('I', yesNo);
+    writeList('J', agentOptions);
+    writeList('K', cities.map((c) => String(c || '').trim()).filter(Boolean));
+
+    const safeLength = (len: number) => Math.max(len, 1);
+    workbook.definedNames.add('CategoryList', `dropdownLists!$A$1:$A$${safeLength(categoryNames.length)}`);
+    workbook.definedNames.add('ListingPurpose', `dropdownLists!$B$1:$B$${safeLength(listingPurpose.length)}`);
+    workbook.definedNames.add('PricingType', `dropdownLists!$C$1:$C$${safeLength(pricingType.length)}`);
+    workbook.definedNames.add('PriceTypeForSale', `dropdownLists!$D$1:$D$${safeLength(priceTypeForSale.length)}`);
+    workbook.definedNames.add('PriceTypeForRent', `dropdownLists!$E$1:$E$${safeLength(priceTypeForRent.length)}`);
+    workbook.definedNames.add('VastuList', `dropdownLists!$F$1:$F$${safeLength(vastuOptions.length)}`);
+    workbook.definedNames.add('PropertyAgeList', `dropdownLists!$G$1:$G$${safeLength(ageOptions.length)}`);
+    workbook.definedNames.add('FacingDirectionList', `dropdownLists!$H$1:$H$${safeLength(directions.length)}`);
+    workbook.definedNames.add('YesNoList', `dropdownLists!$I$1:$I$${safeLength(yesNo.length)}`);
+    workbook.definedNames.add('AgentList', `dropdownLists!$J$1:$J$${safeLength(agentOptions.length)}`);
+    workbook.definedNames.add('CityList', `dropdownLists!$K$1:$K$${safeLength(cities.length)}`);
+
+    Object.entries(configurationByCategory).forEach(([category, values], idx) => {
+      const rangeName = `${normalizeName(category)}_Config`;
+      const col = String.fromCharCode('L'.charCodeAt(0) + idx);
+      writeList(col, values);
+      workbook.definedNames.add(rangeName, `dropdownLists!$${col}$1:$${col}$${Math.max(values.length, 1)}`);
+    });
+
+    let localityColIndex = 'L'.charCodeAt(0) + Object.keys(configurationByCategory).length;
+    Object.entries(cityLocalities).forEach(([city, values]) => {
+      const rangeName = `${normalizeName(city)}_Localities`;
+      const col = String.fromCharCode(localityColIndex);
+      writeList(col, values);
+      workbook.definedNames.add(rangeName, `dropdownLists!$${col}$1:$${col}$${Math.max(values.length, 1)}`);
+      localityColIndex += 1;
+    });
+
+    sheet.addRow([
+      'Title',
+      'Category',
+      'Listing Purpose',
+      'Configuration Fields',
+      'Pricing Type',
+      'Price (INR)',
+      'Price Type',
+      'City',
+      'Locality / Area',
+      'Full Address',
+      'Google Maps Link',
+      'Property Area (sq ft)',
+      'Vastu Complaint',
+      'Property Age',
+      'Facing Direction',
+      'Highlights / Features (Recommended)',
+      'Amenities (Optional)',
+      'Property Images',
+      'Property Videos',
+      'Property Documents',
+      'Video Tour Link',
+      'Property Availability',
+      'Assigned Agent',
+      'Site Visit Allowed'
+    ]);
+
+    const rows = 200;
+    for (let rowNumber = 2; rowNumber <= rows; rowNumber++) {
+      sheet.getRow(rowNumber).height = 18;
+      const setValidation = (col: number, formula: string, allowBlank = true) => {
+        sheet.getCell(rowNumber, col).dataValidation = {
+          type: 'list',
+          formulae: [formula],
+          allowBlank,
+          showErrorMessage: true,
+          errorTitle: 'Invalid value',
+          error: 'Please select a value from the list'
+        };
+      };
+
+      setValidation(2, '=CategoryList', false);
+      setValidation(3, '=ListingPurpose', false);
+      setValidation(4, `=INDIRECT(SUBSTITUTE($B${rowNumber}," ","_") & "_Config")`, true);
+      setValidation(5, '=PricingType', true);
+      setValidation(7, `=IF($C${rowNumber}="For Sale", PriceTypeForSale, IF($C${rowNumber}="For Rent", PriceTypeForRent, ""))`, true);
+      setValidation(8, '=CityList', true);
+      setValidation(9, `=INDIRECT(SUBSTITUTE($H${rowNumber}," ","_") & "_Localities")`, true);
+      setValidation(13, '=VastuList', true);
+      setValidation(14, '=PropertyAgeList', true);
+      setValidation(15, '=FacingDirectionList', true);
+      setValidation(23, '=YesNoList', true);
+      setValidation(24, '=AgentList', true);
+      setValidation(25, '=YesNoList', true);
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': 'attachment; filename=property_template.xlsx'
+      }
+    });
+  } catch (err: any) {
+    console.error('Template generation failed', err);
+    return NextResponse.json({ error: 'Could not generate Excel template', details: err.message }, { status: 500 });
   }
 }
