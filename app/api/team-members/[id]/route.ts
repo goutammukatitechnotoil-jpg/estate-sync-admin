@@ -15,12 +15,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
     }
     
-    // Ensure roleId is returned as string for form compatibility
-    const responseData = {
+    const responseData: any = {
       ...teamMember,
-      roleId: teamMember.roleId && typeof teamMember.roleId === 'object' 
+      roleId: teamMember.roleId && typeof teamMember.roleId === 'object'
         ? (teamMember.roleId as any)._id?.toString() || teamMember.roleId.toString()
-        : teamMember.roleId?.toString() || teamMember.roleId
+        : teamMember.roleId?.toString() || teamMember.roleId,
+      role: teamMember.roleId && typeof teamMember.roleId === 'object'
+        ? {
+            _id: (teamMember.roleId as any)._id?.toString(),
+            name: (teamMember.roleId as any).name,
+            status: (teamMember.roleId as any).status,
+            permissions: (teamMember.roleId as any).permissions
+          }
+        : null
     };
     
     return NextResponse.json({ teamMember: responseData }, { status: 200 });

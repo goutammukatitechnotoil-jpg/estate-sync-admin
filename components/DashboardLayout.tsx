@@ -80,8 +80,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             href="/dashboard"
             onClick={closeSidebar}
             className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname === '/dashboard'
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
           >
             <Home className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Dashboard</span>
@@ -90,8 +90,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             href="/properties"
             onClick={closeSidebar}
             className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/properties')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
           >
             <Building className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Properties</span>
@@ -100,31 +100,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             href="/categories"
             onClick={closeSidebar}
             className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/categories')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
           >
             <Layers className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Categories</span>
           </Link>
           <Link
-            href="/team-members"
-            onClick={closeSidebar}
-            className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/team-members')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-          >
-            <Users className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Team Members</span>
-          </Link>
-          <Link
             href="/roles"
             onClick={closeSidebar}
             className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/roles')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
           >
             <Shield className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Roles</span>
+          </Link>
+          <Link
+            href="/team-members"
+            onClick={closeSidebar}
+            className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/team-members')
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+          >
+            <Users className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Team Members</span>
           </Link>
           <a
             onClick={closeSidebar}

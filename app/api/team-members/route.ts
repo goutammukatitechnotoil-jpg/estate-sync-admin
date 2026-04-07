@@ -26,13 +26,15 @@ export async function GET(req: Request) {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Backwards compatibility: preserve old role field if roleId missing
-    const normalizedMembers = teamMembers.map((member: any) => {
-      if (member.roleId) {
-        member.role = member.roleId.name;
-      }
-      return member;
-    });
+    // Normalize role data to match frontend interface
+    const normalizedMembers = teamMembers.map((member: any) => ({
+      ...member,
+      role: member.roleId ? {
+        _id: member.roleId._id,
+        name: member.roleId.name,
+        status: member.roleId.status
+      } : null
+    }));
 
     return NextResponse.json({ teamMembers: normalizedMembers }, { status: 200 });
   } catch (error) {

@@ -25,11 +25,17 @@ export default function EditRolePage() {
   const router = useRouter();
   const params = useParams();
   const roleId = params.id as string;
+  const [returnTo, setReturnTo] = useState('/roles');
 
   const [role, setRole] = useState<IRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnToParam = params.get('returnTo');
+    if (returnToParam) {
+      setReturnTo(returnToParam);
+    }
     fetchRole();
   }, [roleId]);
 
@@ -42,22 +48,22 @@ export default function EditRolePage() {
         setRole(data.role);
       } else {
         toast.error('Role not found');
-        router.push('/roles');
+        router.push(returnTo);
       }
     } catch (error) {
       toast.error('Failed to load role');
-      router.push('/roles');
+      router.push(returnTo);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSuccess = () => {
-    router.push('/roles');
+    router.push(returnTo);
   };
 
   const handleCancel = () => {
-    router.push('/roles');
+    router.push(returnTo);
   };
 
   if (loading) {
@@ -91,9 +97,9 @@ export default function EditRolePage() {
           <div className="flex items-center gap-4 mb-6">
             <button
               type="button"
-              onClick={() => router.push('/roles')}
+              onClick={() => router.push(returnTo)}
               className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group"
-              title="Back to Roles"
+              title="Back"
             >
               <ArrowLeft size={20} className="text-gray-600 group-hover:-translate-x-1 transition-all duration-300" />
             </button>

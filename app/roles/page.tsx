@@ -302,7 +302,7 @@ export default function RolesPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => router.push(`/roles/edit/${role._id}`)}
+                              onClick={() => router.push(`/roles/${role._id}/edit`)}
                               className="text-indigo-600 hover:text-indigo-900 p-1 rounded"
                               title="Edit"
                             >

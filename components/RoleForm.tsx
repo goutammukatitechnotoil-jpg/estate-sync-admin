@@ -17,7 +17,7 @@ interface IRole {
 
 interface RoleFormProps {
   role?: IRole;
-  onSuccess: () => void;
+  onSuccess: (newRoleId?: string) => void;
   onCancel: () => void;
 }
 
@@ -75,7 +75,12 @@ export default function RoleForm({ role, onSuccess, onCancel }: RoleFormProps) {
 
       if (res.ok) {
         toast.success(role ? 'Role updated successfully!' : 'Role created successfully!');
-        onSuccess();
+        // Pass the new role ID for auto-selection if creating new role
+        if (!role && data.role) {
+          onSuccess(data.role._id);
+        } else {
+          onSuccess();
+        }
       } else {
         toast.error(data.error || `Failed to ${role ? 'update' : 'create'} role`);
       }

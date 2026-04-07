@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, User, Phone, Mail, Shield, ToggleLeft, ToggleRight, Building, Activity, LogOut, Layers } from 'lucide-react';
+import { ArrowLeft, Save, User, Phone, Mail, Shield, ToggleLeft, ToggleRight, Building, Activity, LogOut, Layers, Plus, Edit2, X, Check } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { toast } from 'react-hot-toast';
 import DashboardHeader from '@/components/DashboardHeader';
@@ -12,6 +12,11 @@ interface IRole {
   _id: string;
   name: string;
   status: 'Active' | 'Inactive';
+  permissions: {
+    properties: { view: boolean; edit: boolean };
+    categories: { view: boolean; edit: boolean };
+    teamMembers: { view: boolean; edit: boolean };
+  };
 }
 
 interface TeamMemberFormProps {
@@ -30,6 +35,7 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
     roleId: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedRoleDetails, setSelectedRoleDetails] = useState<IRole | null>(null);
 
   useEffect(() => {
     const initializeForm = async () => {
@@ -40,6 +46,17 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
         // Then fetch team member data if editing
         if (isEdit && teamMemberId) {
           await fetchTeamMember();
+        } else if (!isEdit) {
+          // Check if returning from role creation
+          const params = new URLSearchParams(window.location.search);
+          const newRoleId = params.get('newRoleId');
+          if (newRoleId) {
+            // Auto-select the newly created role
+            await handleRoleSelect(newRoleId);
+            toast.success('Role created! It has been auto-selected for this team member.');
+            // Clean up URL
+            window.history.replaceState({}, '', '/team-members/add');
+          }
         }
       } catch (error) {
         console.error('Failed to initialize form:', error);
@@ -64,6 +81,27 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
     }
   };
 
+  const fetchRoleDetails = async (roleId: string) => {
+    try {
+      const response = await fetch(`/api/roles/${roleId}`);
+      const data = await response.json();
+      if (response.ok && data.role) {
+        setSelectedRoleDetails(data.role);
+      }
+    } catch (error) {
+      console.error('Failed to fetch role details:', error);
+    }
+  };
+
+  const handleRoleSelect = async (roleId: string) => {
+    setFormData(prev => ({ ...prev, roleId }));
+    if (roleId) {
+      await fetchRoleDetails(roleId);
+    } else {
+      setSelectedRoleDetails(null);
+    }
+  };
+
   const fetchTeamMember = async () => {
     try {
       const response = await fetch(`/api/team-members/${teamMemberId}`);
@@ -76,6 +114,11 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
           email: data.teamMember.email,
           roleId: data.teamMember.roleId
         });
+
+        // Automatically fetch and display permissions for the pre-selected role
+        if (data.teamMember.roleId) {
+          await fetchRoleDetails(data.teamMember.roleId);
+        }
       } else {
         toast.error('Failed to load team member');
         router.push('/team-members');
@@ -281,24 +324,142 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
                   <Shield className="w-4 h-4" />
                   Role <span className="text-red-500">*</span>
                 </label>
-                <select
-                  className="w-full p-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-lg"
-                  value={formData.roleId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, roleId: e.target.value }))}
-                >
-                  <option value="">Select a role</option>
-                  {roles.map((role) => (
-                    <option key={role._id} value={role._id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 p-4 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-lg"
+                    value={formData.roleId}
+                    onChange={(e) => handleRoleSelect(e.target.value)}
+                  >
+                    <option value="">Select a role</option>
+                    {roles.map((role) => (
+                      <option key={role._id} value={role._id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/roles/add?returnTo=/team-members/add`)}
+                    className="px-4 py-4 bg-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-200 font-bold transition-colors flex items-center gap-2 whitespace-nowrap"
+                    title="Add new role"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Add Role
+                  </button>
+                </div>
                 {errors.roleId && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
                     {errors.roleId}
                   </p>
                 )}
               </div>
+
+              {/* Role Permissions Display */}
+              {selectedRoleDetails && formData.roleId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-bold text-gray-700 uppercase">
+                      <Shield className="w-4 h-4 inline mr-2" />
+                      {selectedRoleDetails.name} - Permissions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/roles/${selectedRoleDetails._id}/edit?returnTo=${encodeURIComponent(isEdit ? `/team-members/${teamMemberId}/edit` : '/team-members/add')}`)}
+                      className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 font-medium transition-colors flex items-center gap-1"
+                      title="Edit role permissions"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200 p-6 space-y-4">
+                    {/* Properties */}
+                    <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-blue-600" />
+                          <span className="font-medium text-gray-800">Properties</span>
+                        </div>
+                        <div className="flex gap-4 ml-6">
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.properties.view ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">View</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.properties.edit ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">Edit</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Categories */}
+                    <div className="flex items-start gap-4 pb-4 border-b border-gray-200">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-green-600" />
+                          <span className="font-medium text-gray-800">Categories</span>
+                        </div>
+                        <div className="flex gap-4 ml-6">
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.categories.view ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">View</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.categories.edit ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">Edit</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Team Members */}
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-purple-600" />
+                          <span className="font-medium text-gray-800">Team Members</span>
+                        </div>
+                        <div className="flex gap-4 ml-6">
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.teamMembers.view ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">View</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {selectedRoleDetails.permissions.teamMembers.edit ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <X className="w-4 h-4 text-gray-300" />
+                            )}
+                            <span className="text-sm text-gray-700">Edit</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 italic">💡 Changes to role permissions will affect all team members with this role</p>
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className="flex justify-end pt-6 border-t border-gray-100">
@@ -308,11 +469,13 @@ export default function TeamMemberForm({ isEdit = false, teamMemberId = '' }: Te
                   className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-indigo-200"
                 >
                   <Save className="w-5 h-5" />
-                  {loading ? (isEdit ? 'Updating...' : 'Adding...') : (isEdit ? 'Update Team Member' : 'Add Team Member')}
+                  {loading ? (isEdit ? 'Updating...' : 'Adding...') : (isEdit ? 'Update Team Member' : 'Save Team Member')}
                 </button>
               </div>
             </form>
           </div>
+
+
         </div>
       </main>
     </DashboardLayout>

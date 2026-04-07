@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -9,13 +9,28 @@ import RoleForm from '@/components/RoleForm';
 
 export default function AddRolePage() {
   const router = useRouter();
+  const [returnTo, setReturnTo] = useState('/roles');
 
-  const handleSuccess = () => {
-    router.push('/roles');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnToParam = params.get('returnTo');
+    if (returnToParam) {
+      setReturnTo(returnToParam);
+    }
+  }, []);
+
+  const handleSuccess = (newRoleId?: string) => {
+    // If returning to team members form, include the new role ID
+    if (returnTo.includes('/team-members') && newRoleId) {
+      const separator = returnTo.includes('?') ? '&' : '?';
+      router.push(`${returnTo}${separator}newRoleId=${newRoleId}`);
+    } else {
+      router.push(returnTo);
+    }
   };
 
   const handleCancel = () => {
-    router.push('/roles');
+    router.push(returnTo);
   };
 
   return (
@@ -26,9 +41,9 @@ export default function AddRolePage() {
           <div className="flex items-center gap-4 mb-6">
             <button
               type="button"
-              onClick={() => router.push('/roles')}
+              onClick={() => router.push(returnTo)}
               className="p-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm group"
-              title="Back to Roles"
+              title="Back"
             >
               <ArrowLeft size={20} className="text-gray-600 group-hover:-translate-x-1 transition-all duration-300" />
             </button>

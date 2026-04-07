@@ -574,7 +574,7 @@ export default function BulkUploadPropertyPage() {
                       <p className="text-xs text-rose-500 mt-2">Only first 20 shown, download full report using button above.</p>
                     )}
                   </div>
-                )}
+                )} 
                 {/* {result.errors?.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-semibold text-gray-700 mb-2">Error Details:</p>
