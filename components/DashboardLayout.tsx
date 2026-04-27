@@ -126,13 +126,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             <Users className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Team Members</span>
           </Link>
-          <a
+          <Link
+            href="/leads"
             onClick={closeSidebar}
-            className="flex items-center gap-3 px-3 md:px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors cursor-pointer"
-            href="#"
+            className={`flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl font-medium transition-colors ${pathname.startsWith('/leads')
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
           >
             <Users className="w-5 h-5 shrink-0" /> <span className="text-sm md:text-base">Leads</span>
-          </a>
+          </Link>
           <a
             onClick={closeSidebar}
             className="flex items-center gap-3 px-3 md:px-4 py-3 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl font-medium transition-colors cursor-pointer"

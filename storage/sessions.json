@@ -1,0 +1,80 @@
+{
+  "919424358184": {
+    "searchMode": false,
+    "preferences": {
+      "purpose": "",
+      "location": "",
+      "bhk": "",
+      "type": "",
+      "amenities": [],
+      "budget": null,
+      "freeText": "it's peoce range is 1 cr"
+    },
+    "lastResults": [],
+    "history": [
+      {
+        "role": "assistant",
+        "text": "Got it, Hii! You're looking for a residential property in the Sarajpur area of Bangalore within a budget under 1.5 crore. I'll check our catalog to see if there are any suitable properties that match your criteria.",
+        "at": "2026-04-22T13:40:19.768Z"
+      },
+      {
+        "role": "user",
+        "text": "Sure",
+        "at": "2026-04-22T13:42:47.701Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Perfect! I'll continue searching for suitable residential properties in the Sarajpur area of Bangalore within your budget of under 1.5 crore, with a residential purpose.",
+        "at": "2026-04-22T13:43:40.158Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Hi Hii, welcome back to DesiProperty! How can I help you today?",
+        "at": "2026-04-23T05:47:39.997Z"
+      },
+      {
+        "role": "user",
+        "text": "Want to sell property",
+        "at": "2026-04-23T05:48:19.324Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Understood Hii! I can help you with selling your residential property located in the Sarajpur area of Bangalore. Could you please provide any additional details such as your preferred type of property (flat, house), number of bedrooms and bathrooms (bhk), amenities included, or any specific requirements? This will allow us to find suitable buyers quickly.",
+        "at": "2026-04-23T05:51:40.987Z"
+      },
+      {
+        "role": "user",
+        "text": "In property 3 bedrooms 4 bathroom it's 3 BHK",
+        "at": "2026-04-23T05:55:27.353Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Understood, Hii. You're looking to sell a 3-bedroom property with 4 bathrooms and want it listed as a 3 BHK type. Could you please provide any additional details such as the preferred price range or any specific requirements for potential buyers? This will help us find a suitable buyer more quickly.",
+        "at": "2026-04-23T05:57:28.996Z"
+      },
+      {
+        "role": "user",
+        "text": "It's peoce range is 1 cr",
+        "at": "2026-04-23T05:58:57.173Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Understood, Hii! You're looking to sell a residential property in the Sarajpur area of Bangalore with 3 bedrooms and 4 bathrooms (3 BHK), within a budget of under 1 crore. I'll start searching for similar properties that match your specifications. Do you have any specific amenities or requirements that we should consider, such as proximity to schools, parks, or transportation?",
+        "at": "2026-04-23T06:01:07.333Z"
+      },
+      {
+        "role": "assistant",
+        "text": "Hi Hii, welcome back to DesiProperty! How can I help you today?",
+        "at": "2026-04-23T06:06:54.144Z"
+      },
+      {
+        "role": "user",
+        "text": "Is there available any rental property?",
+        "at": "2026-04-23T06:08:18.271Z"
+      }
+    ],
+    "state": null,
+    "whatsappName": "Kv~😍🧿",
+    "userName": "Hii"
+  }
+}

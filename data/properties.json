@@ -1,0 +1,78 @@
+[
+  {
+    "id": "P101",
+    "title": "2 BHK Apartment in Whitefield",
+    "type": "Apartment",
+    "purpose": "Buy",
+    "location": "Whitefield, Bangalore",
+    "price": "₹85 Lakhs",
+    "size": "1180 sq ft",
+    "bhk": "2 BHK",
+    "availability": "Available",
+    "furnishing": "Semi Furnished",
+    "status": "Ready to move",
+    "amenities": ["Parking", "Power Backup", "Gym", "Swimming Pool"],
+    "description": "Well-lit apartment in a gated community close to IT parks.",
+    "nearby": ["Metro Station", "School", "Hospital"],
+    "photos": [
+      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80"
+    ]
+  },
+  {
+    "id": "P102",
+    "title": "3 BHK Villa in Sarjapur",
+    "type": "Villa",
+    "purpose": "Buy",
+    "location": "Sarjapur Road, Bangalore",
+    "price": "₹190 Lakhs",
+    "size": "2200 sq ft",
+    "bhk": "3 BHK",
+    "availability": "Available",
+    "furnishing": "Fully Furnished",
+    "status": "Ready to move",
+    "amenities": ["Garden", "Clubhouse", "Security", "Parking"],
+    "description": "Spacious villa ideal for families, inside a premium township.",
+    "nearby": ["International School", "Tech Park", "Supermarket"],
+    "photos": [
+      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80"
+    ]
+  },
+  {
+    "id": "P103",
+    "title": "1 BHK Flat for Rent in HSR Layout",
+    "type": "Flat",
+    "purpose": "Rent",
+    "location": "HSR Layout, Bangalore",
+    "price": "₹28 Lakhs",
+    "size": "650 sq ft",
+    "bhk": "1 BHK",
+    "availability": "Available",
+    "furnishing": "Semi Furnished",
+    "status": "Immediate",
+    "amenities": ["Lift", "Security", "Water Supply"],
+    "description": "Compact rental option for working professionals.",
+    "nearby": ["Bus Stop", "Restaurants", "Hospital"],
+    "photos": [
+      "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1200&q=80"
+    ]
+  },
+  {
+    "id": "P104",
+    "title": "2 BHK Apartment in Electronic City",
+    "type": "Apartment",
+    "purpose": "Rent",
+    "location": "Electronic City, Bangalore",
+    "price": "₹42 Lakhs",
+    "size": "980 sq ft",
+    "bhk": "2 BHK",
+    "availability": "Available",
+    "furnishing": "Fully Furnished",
+    "status": "Immediate",
+    "amenities": ["Parking", "Gym", "Lift", "Security"],
+    "description": "Good option for professionals looking for quick access to tech offices.",
+    "nearby": ["Tech Park", "Mall", "Hospital"],
+    "photos": [
+      "https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=1200&q=80"
+    ]
+  }
+]

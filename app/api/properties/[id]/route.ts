@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Property from '@/lib/models/Property';
-
+import Category from '@/lib/models/Category';
+import mongoose from 'mongoose';
 const normalizeValue = (value: any): string | undefined => {
   if (value === undefined || value === null) return undefined;
   return String(value).trim();
@@ -44,16 +45,50 @@ const normalizeFacingDirection = (value: any): string | undefined => {
   return undefined;
 };
 
+import TeamMember from '@/lib/models/TeamMember';
+import Role from '@/lib/models/Role';
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
     const { id } = await params;
 
+    // Ensure models are registered
+    const _Role = Role;
+    const _Category = Category;
+
     const property = await Property.findById(id).lean();
     if (!property) {
       return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
     }
-    return NextResponse.json({ property }, { status: 200 });
+
+    let agent = null;
+    if (property.assignedAgentId) {
+      if (mongoose.Types.ObjectId.isValid(property.assignedAgentId)) {
+        agent = await TeamMember.findById(property.assignedAgentId).populate('roleId').lean();
+      }
+    }
+
+    const relatedProperties = await Property.find({
+      category: property.category,
+      _id: { $ne: property._id },
+      status: 1
+    }).limit(3).lean();
+
+    let mappedDynamicData = [];
+    if (property.dynamicData) {
+      const categoryObj = await Category.findOne({ name: property.category }).lean();
+      if (categoryObj && categoryObj.fields) {
+        for (const [key, value] of Object.entries(property.dynamicData)) {
+          const field = categoryObj.fields.find((f: any) => f.name === key);
+          if (field) {
+            mappedDynamicData.push({ label: field.label, value: value });
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ property, agent, relatedProperties, mappedDynamicData }, { status: 200 });
   } catch (error) {
     console.error('Get property error:', error);
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 });
@@ -65,7 +100,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await connectDB();
     const { id } = await params;
     const rawUpdates = await req.json();
-    
+
     // Map frontend aliases to DB schema names
     const updates: any = { ...rawUpdates };
     if (updates.propertyArea !== undefined) {

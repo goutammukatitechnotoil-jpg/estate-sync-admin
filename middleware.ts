@@ -11,9 +11,10 @@ const getJwtSecretKey = () => {
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('admin_token')?.value;
   const isLoginPage = request.nextUrl.pathname.startsWith('/login');
+  const isPublicPage = request.nextUrl.pathname.startsWith('/p');
   
   if (!token) {
-    if (!isLoginPage && request.nextUrl.pathname !== '/api/auth/login') {
+    if (!isLoginPage && !isPublicPage && request.nextUrl.pathname !== '/api/auth/login') {
       return NextResponse.redirect(new URL('/login', request.url));
     }
     return NextResponse.next();
