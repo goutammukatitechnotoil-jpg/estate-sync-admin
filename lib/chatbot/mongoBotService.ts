@@ -193,7 +193,7 @@ export async function processWhatsAppMessage(mobile: string, text: string, messa
     let propertyResponses = [];
     if (matches.length > 0) {
       for (const p of matches) {
-        const block = `🏢 *${p.title}*\n📍 ${p.locality}, ${p.city}\n💰 *${formatPrice(p)}*\n📐 ${p.area ? p.area + ' sqft' : 'N/A'} | ${p.category}\n\n🔗 View Full Details:\nhttps://8e76-106-222-218-219.ngrok-free.app/p/${p._id}?v=${Date.now()}`;
+        const block = `🏢 *${p.title}*\n📍 ${p.locality}, ${p.city}\n💰 *${formatPrice(p)}*\n📐 ${p.area ? p.area + ' sqft' : 'N/A'} | ${p.category}\n\n🔗 View Full Details:\nhttps://8e76-106-222-218-219.ngrok-free.app/p/${p._id}?v=${Date.now()}&uid=${user._id}`;
         propertyResponses.push(block);
         
         await whatsapp.sendMessage(mobile, block);

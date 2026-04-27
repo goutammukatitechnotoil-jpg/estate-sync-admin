@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   MapPin,
   Maximize,
@@ -30,7 +31,10 @@ import {
   Briefcase,
   Compass,
   Home as HomeIcon,
-  PlayCircle
+  PlayCircle,
+  X,
+  Mail,
+  MessageSquare
 } from 'lucide-react';
 
 interface Property {
@@ -76,15 +80,82 @@ interface Agent {
   roleId?: { name: string };
   email?: string;
   phone?: string;
+  mobileNumber?: string;
 }
 
-export default function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
+function PropertyPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [property, setProperty] = useState<Property | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
   const [relatedProperties, setRelatedProperties] = useState<Property[]>([]);
   const [showMoreDesc, setShowMoreDesc] = useState(false);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionStatus, setSubmissionStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const searchParams = useSearchParams();
+  const botUserId = searchParams.get('uid');
+  const [today, setToday] = useState('');
+
+  useEffect(() => {
+    setToday(new Date().toISOString().split('T')[0]);
+  }, [botUserId]);
+
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    preferredDate: '',
+    preferredTime: '',
+    message: ''
+  });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!property) return;
+    
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          propertyId: property._id,
+          botUserId: botUserId
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSubmissionStatus({ type: 'success', message: 'Meeting scheduled successfully!' });
+        setTimeout(() => {
+          setIsMeetingModalOpen(false);
+          setSubmissionStatus(null);
+          setFormData({
+            fullName: '',
+            phone: '',
+            email: '',
+            preferredDate: '',
+            preferredTime: '',
+            message: ''
+          });
+        }, 2000);
+      } else {
+        setSubmissionStatus({ type: 'error', message: data.error || 'Failed to schedule meeting' });
+      }
+    } catch (err) {
+      console.error(err);
+      setSubmissionStatus({ type: 'error', message: 'An error occurred. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -157,9 +228,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     const type = p.commercialType || p.bhkType || category;
     const location = [p.locality, p.city].filter(Boolean).join(', ');
     const size = p.plotArea || p.area ? `${p.plotArea || p.area} sqft` : '';
-    
+
     let desc = `Experience premium space in this stunning ${type} located in the prime area of ${location}.`;
-    
+
     if (size) {
       desc += ` Spanning across a generous ${size}, this ${category.toLowerCase()} features a well-thought-out layout designed for maximum utility and comfort.`;
     }
@@ -280,7 +351,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                       <Image src={media.url} alt="Thumb" fill className="object-cover" />
                     ) : (
                       <div className="w-full h-full bg-slate-800 flex items-center justify-center text-white/80">
-                         <PlayCircle size={32} strokeWidth={1.5} />
+                        <PlayCircle size={32} strokeWidth={1.5} />
                       </div>
                     )}
                   </div>
@@ -288,7 +359,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-3">
               <div className="mb-2 flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">
                   <CheckCircle2 size={14} />
@@ -311,7 +382,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-1">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {getSpecs(property).map((spec, i) => (
                 <div key={i} className="bg-gray-100 rounded-[1rem] p-6 border border-slate-100 flex items-center gap-5 shadow-sm">
                   <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-[#7c3aed]">
@@ -325,30 +396,30 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               ))}
             </div>
 
-            <div className="space-y-6 pt-6">
+            <div className="space-y-4 pt-3">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">About Property</h2>
               <p className={`text-slate-500 text-lg leading-relaxed max-w-4xl font-medium ${showMoreDesc ? '' : 'line-clamp-3 md:line-clamp-4'}`}>
                 {generateDynamicDescription(property)}
               </p>
-              <button 
+              <button
                 onClick={() => setShowMoreDesc(!showMoreDesc)}
                 className="text-[#7c3aed] text-sm font-black hover:underline flex items-center gap-1"
               >
-                {showMoreDesc ? 'Show less' : 'Show more'} 
+                {showMoreDesc ? 'Show less' : 'Show more'}
                 {showMoreDesc ? <ChevronLeft size={18} className="rotate-90" /> : <ChevronDown size={18} />}
               </button>
             </div>
 
             {property.highlights && property.highlights.length > 0 && (
-              <div className="space-y-10 pt-1">
+              <div className="space-y-4 pt-1">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Highlights</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="flex flex-wrap gap-3">
                   {property.highlights.map((item, idx) => (
-                    <div key={`highlight-${idx}`} className="bg-gray-100 rounded-[1rem] p-4 border border-slate-100 flex items-center gap-5 group hover:border-[#7c3aed]/30 hover:shadow-lg hover:shadow-purple-500/5 transition-all">
-                      <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-[#7c3aed] group-hover:scale-110 transition-transform">
+                    <div key={`highlight-${idx}`} className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg border border-slate-200 w-fit hover:border-[#7c3aed]/30 hover:shadow-lg hover:shadow-purple-500/5 transition-all">
+                      <div className="w-8 h-8 bg-purple-50 rounded-md flex items-center justify-center text-[#7c3aed] group-hover:scale-110 transition-transform">
                         <Zap size={22} strokeWidth={2.5} />
                       </div>
-                      <span className="text-sm font-black text-slate-700 capitalize tracking-tight">{item}</span>
+                      <span className="text-sm font-semibold text-slate-800">{item}</span>
                     </div>
                   ))}
                 </div>
@@ -356,9 +427,28 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             )}
 
             {property.amenities && property.amenities.length > 0 && (
-              <div className="space-y-10 pt-1">
+              <div className="space-y-5 pt-1">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Amenities</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="flex flex-wrap gap-3">
+                  {property.amenities.map((item, idx) => {
+                    const Icon = getAmenityIcon(item);
+                    return (
+                      <div
+                        key={`amenity-${idx}`}
+                        className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg border border-slate-200 w-fit hover:border-[#7c3aed]/30 hover:shadow-lg hover:shadow-purple-500/5 transition-all"
+                      >
+                        <div className="w-8 h-8 bg-purple-50 rounded-md flex items-center justify-center text-[#7c3aed] group-hover:scale-110 transition-transform">
+                          <Icon size={18} strokeWidth={2} />
+                        </div>
+
+                        <span className="text-sm font-semibold text-slate-800">
+                          {item}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {property.amenities.map((item, idx) => {
                     const Icon = getAmenityIcon(item);
                     return (
@@ -370,17 +460,17 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                       </div>
                     );
                   })}
-                </div>
+                </div> */}
               </div>
             )}
 
-            <div className="space-y-10 pt-2">
+            <div className="space-y-5 pt-1">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">Agent Details</h2>
               <div className="bg-gray-100 rounded-[1rem] p-5 border border-slate-100 flex flex-col md:flex-row items-center gap-10 shadow-sm">
                 <div className="w-24 h-24 rounded-full bg-[#7c3aed] flex items-center justify-center text-white text-3xl font-black shadow-xl ring-4 ring-white">
                   {agent?.fullName?.split(' ').map(n => n[0]).join('') || ''}
                 </div>
-                <div className="flex-1 text-center md:text-left space-y-3">
+                <div className="flex-1 text-center md:text-left space-y-1">
                   <div className="flex items-center justify-center md:justify-start gap-3">
                     <h3 className="text-2xl font-black text-slate-900 tracking-tight">{agent?.fullName || 'Not defined'}</h3>
                     <CheckCircle2 size={24} fill="#3b82f6" className="text-white" />
@@ -398,7 +488,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             </div>
 
             {relatedProperties.length > 0 && (
-              <div className="space-y-12 pt-5">
+              <div className="space-y-4 pt-3">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Related Properties</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                   {relatedProperties.map((p) => (
@@ -433,16 +523,22 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 </div>
 
                 <button
+                  onClick={() => setIsMeetingModalOpen(true)}
                   className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl mb-3 mt-8"
                 >
                   <Calendar className="w-5 h-5 inline mr-2" />
                   Schedule Meeting
                 </button>
 
-                <button className="w-full bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-semibold hover:bg-purple-50 transition-all">
-                  <Phone className="w-5 h-5 inline mr-2" />
-                  Talk to Agent
-                </button>
+                {agent?.mobileNumber && (
+                  <a 
+                    href={`tel:${agent.mobileNumber}`}
+                    className="w-full bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-semibold hover:bg-purple-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Phone className="w-5 h-5" />
+                    Talk to Agent
+                  </a>
+                )}
 
                 <div className="pt-10 border-t border-slate-50 space-y-6 mt-8">
                   <div className="flex justify-between items-center">
@@ -472,13 +568,163 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
       {/* Mobile Sticky CTA */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-gray-100 p-4 z-50 flex gap-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-        <button className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-black text-sm shadow-lg shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all">
+        <button 
+          onClick={() => setIsMeetingModalOpen(true)}
+          className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-black text-sm shadow-lg shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all"
+        >
           <Calendar size={18} /> Schedule Meeting
         </button>
-        <button className="flex-1 bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
-          <Phone size={18} /> Call
-        </button>
+        {agent?.mobileNumber && (
+          <a 
+            href={`tel:${agent.mobileNumber}`}
+            className="flex-1 bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+          >
+            <Phone size={18} /> Call
+          </a>
+        )}
       </div>
+      {/* Schedule Meeting Modal */}
+      {isMeetingModalOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsMeetingModalOpen(false);
+          }}
+        >
+          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 flex-shrink-0">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Schedule Meeting</h3>
+              <button 
+                onClick={() => setIsMeetingModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto p-8 pt-6">
+              <form onSubmit={handleScheduleSubmit} className="space-y-5">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Full Name *</label>
+                    <div className="relative">
+                      <input 
+                        required
+                        name="fullName"
+                        value={formData.fullName}
+                        onChange={handleInputChange}
+                        placeholder="Enter your full name"
+                        className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900 placeholder:text-slate-300"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number *</label>
+                      <input 
+                        required
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="+91 98765 43210"
+                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900 placeholder:text-slate-300"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Email Address *</label>
+                    <input 
+                      required
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      placeholder="your.email@example.com"
+                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900 placeholder:text-slate-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Preferred Date *</label>
+                    <input 
+                      required
+                      type="date"
+                      name="preferredDate"
+                      min={today || undefined}
+                      value={formData.preferredDate}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Preferred Time *</label>
+                    <input 
+                      required
+                      type="time"
+                      name="preferredTime"
+                      value={formData.preferredTime}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Message (Optional)</label>
+                  <textarea 
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    placeholder="Any specific requirements?"
+                    rows={3}
+                    className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#7c3aed] focus:bg-white outline-none transition-all font-medium text-slate-900 placeholder:text-slate-300 resize-none"
+                  />
+                </div>
+              </div>
+
+              {submissionStatus && (
+                <div className={`p-4 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${
+                  submissionStatus.type === 'success' 
+                    ? 'bg-green-50 text-green-700 border border-green-100' 
+                    : 'bg-red-50 text-red-700 border border-red-100'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {submissionStatus.type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+                    {submissionStatus.message}
+                  </div>
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-[#7c3aed] to-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest shadow-xl shadow-purple-200 hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:scale-100"
+              >
+                {isSubmitting ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Calendar size={18} />
+                    Schedule Meeting
+                  </>
+                )}
+              </button>
+            </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function PropertyPage(props: any) {
+  return (
+    <Suspense fallback={null}>
+      <PropertyPageContent {...props} />
+    </Suspense>
   );
 }
