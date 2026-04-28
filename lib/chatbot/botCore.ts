@@ -60,8 +60,33 @@ async function sendProperties(to: string, results: any[]) {
 
 export async function handleIncoming(chatId: string, text: string, whatsappName: string) {
   console.log(`Processing message from ${whatsappName} (${chatId}): ${text}`);
-  
+
   let session = sessions.get(chatId);
+
+  // ✅ ADD OPTIONAL LOGIC HERE
+  const now = Date.now();
+  const lastActive = session?.lastActive || 0;
+  const diffHours = (now - lastActive) / (1000 * 60 * 60);
+
+  if (
+    diffHours > 24 &&
+    (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello')
+  ) {
+    const greeting = `Hi ${session?.userName || 'there'}, welcome back to ${companyName}! How can I help you today?`;
+
+    sessions.update(chatId, { lastActive: now });
+    await whatsapp.sendMessage(chatId, greeting);
+    return;
+  }
+
+  // always update last active
+  sessions.update(chatId, { lastActive: now });
+
+  // 🚫 STOP BOT if human agent takeover is active
+  if (session?.isHumanHandover) {
+    console.log('Bot stopped - human takeover active');
+    return;
+  }
 
   // 1. Handle "Hi" / Start Command
   if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello' || text.toLowerCase() === '/start') {
@@ -82,9 +107,9 @@ export async function handleIncoming(chatId: string, text: string, whatsappName:
   // 2. Handle Name Collection (Onboarding State)
   if (session.state === 'AWAITING_NAME') {
     const collectedName = text.trim();
-    sessions.update(chatId, { 
-      userName: collectedName, 
-      state: null 
+    sessions.update(chatId, {
+      userName: collectedName,
+      state: null
     });
     // Send 2nd template with the name as a parameter
     await whatsapp.sendTemplate(chatId, 'new_user_2nd_message', [collectedName]);
@@ -109,11 +134,32 @@ export async function handleIncoming(chatId: string, text: string, whatsappName:
     }
 
     const session = sessions.get(chatId);
+
+    if (
+      text.toLowerCase().includes('agent') ||
+      text.toLowerCase().includes('talk to agent') ||
+      text.toLowerCase().includes('call me')
+    ) {
+      sessions.update(chatId, { isHumanHandover: true });
+
+      await whatsapp.sendMessage(
+        chatId,
+        `You're now being connected to our property expert.\n\n👉 https://wa.me/${agentPhone}\n\nOur agent will assist you further.`
+      );
+
+      return;
+    }
+
     const aiResponse = await getAiAssistance(chatId, text, session);
 
     if (aiResponse?.error) {
-      const warning = aiUnavailableMessage();
-      await whatsapp.sendMessage(chatId, warning);
+      console.log('AI failed, fallback reply used');
+
+      await whatsapp.sendMessage(
+        chatId,
+        `I can help you with buying, selling, or renting properties. Try something like "2BHK in Whitefield under 50L".`
+      );
+
       return;
     }
 
