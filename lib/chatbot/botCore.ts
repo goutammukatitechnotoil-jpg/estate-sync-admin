@@ -5,44 +5,142 @@ const {
   openclawBaseUrl,
   openclawModel,
 } = require('./config');
+
 const { queryOpenClaw } = require('./openclawClient');
 const { getPropertyById, formatPropertyCard, getPrimaryPhoto } = require('./propertyService');
-const { welcomeMessage, aiUnavailableMessage } = require('./messages');
 import { sessions, leads, whatsapp, ragService } from './instances';
 
-function mapAiFiltersToPreferences(filters: any = {}, originalText: string = '') {
+// --------------------
+// TYPES
+// --------------------
+type AiFilters = {
+  purpose?: string;
+  type?: string;
+  bhk?: string;
+  location?: string;
+  amenities?: string[];
+  budgetMin?: number;
+  budgetMax?: number;
+};
+
+type AiResponse = {
+  reply?: string;
+  intent?: string;
+  filters?: AiFilters;
+  suggestedPropertyIds?: string[];
+  error?: boolean;
+};
+
+type SessionType = {
+  userName?: string;
+  preferences?: any;
+  history?: any[];
+  isHumanHandover?: boolean;
+};
+
+// --------------------
+// AI FILTER MAPPING
+// --------------------
+function mapAiFiltersToPreferences(
+  filters: AiFilters = {},
+  originalText: string = ''
+) {
   return {
     purpose: filters.purpose || '',
     type: filters.type || '',
     bhk: filters.bhk || '',
     location: filters.location || '',
     amenities: filters.amenities || [],
-    budget: filters.budgetMin || filters.budgetMax ? { min: filters.budgetMin || null, max: filters.budgetMax || null } : null,
-    freeText: originalText.toLowerCase()
+    budget:
+      filters.budgetMin || filters.budgetMax
+        ? { min: filters.budgetMin || null, max: filters.budgetMax || null }
+        : null,
+    freeText: originalText.toLowerCase(),
   };
 }
 
-async function getAiAssistance(chatId: string, text: string, session: any) {
+// --------------------
+// AI CALL
+// --------------------
+async function getAiAssistance(
+  chatId: string,
+  text: string,
+  session: SessionType
+): Promise<AiResponse> {
   try {
     const ragContext = await ragService.findRelevantContext(text);
-    return await queryOpenClaw({
+
+    let response: any = await queryOpenClaw({
       baseUrl: openclawBaseUrl,
       model: openclawModel,
       message: text,
       ragContext,
-      history: session.history || [],
+      history: (session.history || []).slice(-5),
       preferences: session.preferences || {},
-      userName: session.userName
+      userName: session.userName,
+
+      systemPrompt: `
+You are a professional real estate consultant for ${companyName}.
+
+Speak like a human. Keep answers short.
+
+Guide the user step by step.
+
+Never give random answers.
+Never mention AI/system.
+
+PRICE:
+"That depends on size and location. Share your budget."
+
+LOCATION:
+"Well-connected area with strong growth."
+
+INVESTMENT:
+"Good for long-term growth."
+
+LEGAL:
+"I can guide you through documents."
+
+CONFUSED:
+"Tell me your top priority — budget, location, or usage."
+
+SITE VISIT:
+"Would you like to visit this weekend or weekday?"
+
+OUTPUT STRICT JSON:
+{
+  "reply": "",
+  "intent": "",
+  "filters": {},
+  "suggestedPropertyIds": []
+}
+`
     });
+
+    // SAFE PARSE
+    if (typeof response === 'string') {
+      try {
+        response = JSON.parse(response);
+      } catch {
+        response = { reply: response };
+      }
+    }
+
+    return response as AiResponse;
+
   } catch (error) {
-    console.error('getAiAssistance error:', error);
+    console.error('AI error:', error);
     return { error: true };
   }
 }
 
+// --------------------
+// SEND PROPERTY
+// --------------------
 async function sendProperty(to: string, property: any) {
   const caption = formatPropertyCard(property);
   const photo = getPrimaryPhoto(property);
+
   const buttons = [{ id: `interested:${property.id}`, title: 'Interested' }];
 
   if (photo) {
@@ -58,144 +156,115 @@ async function sendProperties(to: string, results: any[]) {
   }
 }
 
-export async function handleIncoming(chatId: string, text: string, whatsappName: string) {
-  console.log(`Processing message from ${whatsappName} (${chatId}): ${text}`);
+// --------------------
+// MAIN HANDLER
+// --------------------
+export async function handleIncoming(
+  chatId: string,
+  text: string,
+  whatsappName: string
+) {
+  console.log(`Processing: ${whatsappName} (${chatId}) -> ${text}`);
 
-  let session = sessions.get(chatId);
+  let session: SessionType = sessions.get(chatId) || {};
+  const lowerText = text.toLowerCase();
 
-  // ✅ ADD OPTIONAL LOGIC HERE
-  const now = Date.now();
-  const lastActive = session?.lastActive || 0;
-  const diffHours = (now - lastActive) / (1000 * 60 * 60);
+  // STOP BOT if agent takeover
+  if (session.isHumanHandover) return;
 
-  if (
-    diffHours > 24 &&
-    (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello')
-  ) {
-    const greeting = `Hi ${session?.userName || 'there'}, welcome back to ${companyName}! How can I help you today?`;
+  // --------------------
+  // GREETING
+  // --------------------
+  const greetings = ['hi', 'hello', 'hey', '/start'];
 
-    sessions.update(chatId, { lastActive: now });
-    await whatsapp.sendMessage(chatId, greeting);
-    return;
-  }
+  if (greetings.includes(lowerText)) {
+    const reply = session.userName
+      ? `Hi ${session.userName}, how can I help you today?`
+      : `Hi, welcome to ${companyName}. I can help you buy, sell, or rent property. What are you looking for?`;
 
-  // always update last active
-  sessions.update(chatId, { lastActive: now });
-
-  // 🚫 STOP BOT if human agent takeover is active
-  if (session?.isHumanHandover) {
-    console.log('Bot stopped - human takeover active');
-    return;
-  }
-
-  // 1. Handle "Hi" / Start Command
-  if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello' || text.toLowerCase() === '/start') {
-    if (!session.userName || session.userName === 'Guest' || session.userName === whatsappName) {
-      // NEW USER (or reset) - Send first template
-      sessions.clear(chatId);
-      sessions.update(chatId, { state: 'AWAITING_NAME', whatsappName: whatsappName });
-      await whatsapp.sendTemplate(chatId, 'welcome_message_new_user');
-    } else {
-      // EXISTING USER - Greet by name
-      const greeting = `Hi ${session.userName}, welcome back to ${companyName}! How can I help you today?`;
-      sessions.pushHistory(chatId, 'assistant', greeting);
-      await whatsapp.sendMessage(chatId, greeting);
-    }
-    return;
-  }
-
-  // 2. Handle Name Collection (Onboarding State)
-  if (session.state === 'AWAITING_NAME') {
-    const collectedName = text.trim();
-    sessions.update(chatId, {
-      userName: collectedName,
-      state: null
-    });
-    // Send 2nd template with the name as a parameter
-    await whatsapp.sendTemplate(chatId, 'new_user_2nd_message', [collectedName]);
+    await whatsapp.sendMessage(chatId, reply);
     return;
   }
 
   sessions.pushHistory(chatId, 'user', text);
 
   try {
+    // --------------------
+    // LEAD FLOW
+    // --------------------
     const leadResult = leads.handle(chatId, text);
+
     if (leadResult) {
       if (!leadResult.done) {
-        sessions.pushHistory(chatId, 'assistant', leadResult.reply);
         await whatsapp.sendMessage(chatId, leadResult.reply);
         return;
       }
-      const session = sessions.get(chatId);
-      const reply = `Thanks ${leadResult.lead.name}. ${agentName} will contact you soon. requirement summary: ${session.preferences.freeText || 'General Inquiry'}. Direct contact: ${agentPhone}.`;
-      sessions.pushHistory(chatId, 'assistant', reply);
+
+      const reply = `Thanks ${leadResult.lead.name}. ${agentName} will contact you. You can also reach: ${agentPhone}`;
       await whatsapp.sendMessage(chatId, reply);
       return;
     }
 
-    const session = sessions.get(chatId);
-
+    // --------------------
+    // AGENT HANDOVER
+    // --------------------
     if (
-      text.toLowerCase().includes('agent') ||
-      text.toLowerCase().includes('talk to agent') ||
-      text.toLowerCase().includes('call me')
+      lowerText === 'talk to agent' ||
+      lowerText === 'connect agent' ||
+      lowerText === 'call me'
     ) {
       sessions.update(chatId, { isHumanHandover: true });
 
       await whatsapp.sendMessage(
         chatId,
-        `You're now being connected to our property expert.\n\n👉 https://wa.me/${agentPhone}\n\nOur agent will assist you further.`
+        `Connecting you to expert 👉 https://wa.me/${agentPhone}`
       );
-
       return;
     }
 
+    // --------------------
+    // AI RESPONSE
+    // --------------------
     const aiResponse = await getAiAssistance(chatId, text, session);
 
-    if (aiResponse?.error) {
-      console.log('AI failed, fallback reply used');
-
+    if (aiResponse.error) {
       await whatsapp.sendMessage(
         chatId,
-        `I can help you with buying, selling, or renting properties. Try something like "2BHK in Whitefield under 50L".`
+        "Tell me your budget and location."
       );
-
       return;
     }
 
-    const combinedMessage = aiResponse?.reply || '';
-    const aiPreferences = aiResponse && !aiResponse.error ? mapAiFiltersToPreferences(aiResponse.filters, text) : null;
-    const mergedPreferences = {
-      ...session.preferences,
-      ...(aiPreferences || {}),
-      freeText: text.toLowerCase()
-    };
+    let reply =
+      typeof aiResponse.reply === 'string' && aiResponse.reply.length < 400
+        ? aiResponse.reply
+        : "Tell me your requirement.";
 
-    let results = (aiResponse && !aiResponse.error && aiResponse.suggestedPropertyIds || [])
+    const invalid = ['error', 'ai', 'technical', 'delay'];
+
+    if (invalid.some(w => reply.toLowerCase().includes(w))) {
+      reply = "Tell me your requirement.";
+    }
+
+    await whatsapp.sendMessage(chatId, reply);
+
+    // --------------------
+    // PROPERTY RESULTS
+    // --------------------
+    const ids = Array.isArray(aiResponse.suggestedPropertyIds)
+      ? aiResponse.suggestedPropertyIds
+      : [];
+
+    const results = ids
       .map((id: string) => getPropertyById(id))
       .filter(Boolean);
-
-    if (aiResponse.intent === 'greeting') {
-      results = [];
-      mergedPreferences.location = '';
-    }
-
-    sessions.update(chatId, {
-      preferences: mergedPreferences,
-      lastResults: results.map((p: any) => p.id)
-    });
-
-    if (combinedMessage) {
-      sessions.pushHistory(chatId, 'assistant', combinedMessage);
-      await whatsapp.sendMessage(chatId, combinedMessage);
-    }
 
     if (results.length) {
       await sendProperties(chatId, results);
     }
 
   } catch (error) {
-    console.error('Bot processing error:', error);
-    await whatsapp.sendMessage(chatId, 'Sorry, I encountered an error. Please try saying "Hi" to restart.');
+    console.error('Error:', error);
+    await whatsapp.sendMessage(chatId, 'Something went wrong. Please try again.');
   }
 }

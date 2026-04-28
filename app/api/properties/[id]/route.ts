@@ -63,9 +63,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     let agent = null;
+
     if (property.assignedAgentId) {
       if (mongoose.Types.ObjectId.isValid(property.assignedAgentId)) {
-        agent = await TeamMember.findById(property.assignedAgentId).populate('roleId').lean();
+        const agentData = await TeamMember.findById(property.assignedAgentId)
+          .populate('roleId')
+          .lean();
+
+        if (agentData) {
+          agent = {
+            id: agentData._id,
+            name: agentData.name,
+            role: agentData.roleId?.name || '',
+          };
+        }
       }
     }
 

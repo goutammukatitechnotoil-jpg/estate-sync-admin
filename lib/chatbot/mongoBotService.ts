@@ -1,243 +1,272 @@
-import mongoose from 'mongoose';
 import BotUser from '../models/BotUser';
 import ChatMessage from '../models/ChatMessage';
 import Property from '../models/Property';
-import SentMessage from '../models/SentMessage';
 import { WhatsappService } from './whatsappService';
-import { OllamaClient } from './ollamaClient';
-import { openclawBaseUrl, companyName } from './config';
 import connectDB from '../db';
-import console from 'console';
 
 const whatsapp = new WhatsappService();
-const ollama = new OllamaClient(openclawBaseUrl || 'http://localhost:11434');
 
-export async function processWhatsAppMessage(mobile: string, text: string, messageId?: string, contextId?: string) {
-  console.log(`[Chatbot] Processing message from ${mobile}: "${text}" (Context: ${contextId})`);
+/* -------------------- CACHE -------------------- */
+let cachedCities: string[] = [];
+let lastCityFetch = 0;
+
+async function getCities() {
+  const now = Date.now();
+
+  if (cachedCities.length && now - lastCityFetch < 3600000) {
+    return cachedCities;
+  }
+
+  const cities = await Property.distinct('city');
+  cachedCities = cities.map((c: string) => c.toLowerCase());
+  lastCityFetch = now;
+
+  return cachedCities;
+}
+
+/* -------------------- INTENT -------------------- */
+function detectIntent(text: string) {
+  const t = text.toLowerCase().trim();
+
+  if (['hi', 'hello', 'hey', 'hii', 'hlo'].includes(t)) return 'greeting';
+  if (t.includes('who are you') || t.includes('what are you')) return 'identity';
+  if (t === 'yes') return 'yes';
+  if (t === 'no') return 'no';
+  if (t.includes("don't want") || t.includes('not interested')) return 'negative';
+
+  if (
+    t.includes('flat') ||
+    t.includes('apartment') ||
+    t.includes('plot') ||
+    t.includes('villa') ||
+    t.includes('rent') ||
+    t.includes('buy')
+  ) return 'search';
+
+  return 'fallback';
+}
+
+/* -------------------- ENTITY EXTRACTION -------------------- */
+async function extractEntities(text: string) {
+  const lower = text.toLowerCase();
+
+  const cities = await getCities();
+  let location = cities.find(c => lower.includes(c)) || '';
+
+  const categories = ['flat', 'apartment', 'villa', 'plot', 'shop', 'office'];
+  const category = categories.find(c => lower.includes(c)) || '';
+
+  const areaMatch = lower.match(/(\d{3,5})\s?sqft/);
+  const area = areaMatch ? parseInt(areaMatch[1]) : null;
+
+  return { location, category, area };
+}
+
+/* -------------------- QUERY BUILDER -------------------- */
+function buildQuery(ctx: any) {
+  const query: any = {
+    status: 1,
+    availability: true
+  };
+
+  if (ctx.location) {
+    query.$or = [
+      { city: { $regex: ctx.location, $options: 'i' } },
+      { locality: { $regex: ctx.location, $options: 'i' } }
+    ];
+  }
+
+  if (ctx.category) {
+    query.category = { $regex: ctx.category, $options: 'i' };
+  }
+
+  if (ctx.area) {
+    query.area = {
+      $gte: ctx.area - 200,
+      $lte: ctx.area + 200
+    };
+  }
+
+  return query;
+}
+
+/* -------------------- MAIN FUNCTION -------------------- */
+export async function processWhatsAppMessage(
+  mobile: string,
+  text: string,
+  messageId?: string,
+  contextId?: string
+) {
+  
+  console.log(`[Chatbot] ${mobile}: ${text}`);
 
   try {
-    const db = await connectDB();
-    let user = await BotUser.findOne({ mobile });
+    await connectDB();
 
+    let user: any = await BotUser.findOne({ mobile });
+
+    /* ---------- NEW USER ---------- */
     if (!user) {
       user = await BotUser.create({ mobile, status: 'name_pending' });
-      const response = `[Sent Template: welcome_message_new_user]`;
-      await whatsapp.sendTemplate(mobile, 'welcome_message_new_user', [companyName]);
 
-      await ChatMessage.create({
-        userId: user._id,
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: response,
-        timestamp: new Date()
-      });
+        `Hi, welcome to DesiProperty 😊\n\nBefore we begin, may I know your name?`
+      );
       return;
     }
 
-    // Session Reset Logic
-    const now = new Date();
-    const lastInteraction = user.updatedAt || new Date(0);
-    const isNewSession = lastInteraction.toDateString() !== now.toDateString() || (user as any).isIntervened;
-    await BotUser.updateOne({ _id: user._id }, { updatedAt: now, isIntervened: false });
-
-    // Name Collection
+    /* ---------- NAME ---------- */
     if (user.status === 'name_pending') {
-      const collectedName = text.trim();
-      if (collectedName.length < 2) return;
-      await BotUser.updateOne({ _id: user._id }, { name: collectedName, status: 'active' });
-      const response = `Thanks ${collectedName}! I've saved your name. How can I help you with your property search today?`;
-      await whatsapp.sendTemplate(mobile, 'new_user_2nd_message', [collectedName]);
+      const name = text.trim();
+      if (name.length < 2) return;
 
-      await ChatMessage.create({
-        userId: user._id,
+      await BotUser.updateOne(
+        { _id: user._id },
+        { name, status: 'active' }
+      );
+
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: response,
-        timestamp: new Date()
-      });
+        `Nice to meet you, ${name} 😊\n\nWhat kind of property are you looking for?`
+      );
       return;
     }
 
     const lowerText = text.toLowerCase().trim();
+    const intent = detectIntent(lowerText);
 
-    // 1. ESCAPE / AGENT REQUEST
-    if (lowerText === "talk to agent" || lowerText === "call agent") {
-      const response = "I'm connecting you with our senior property consultant. They will reach out to you on this number shortly. 📞\n\nBest regards,\nTeam " + companyName;
-      await whatsapp.sendMessage(mobile, "I'm connecting you with our senior property consultant. They will reach out to you on this number shortly. 📞");
-      await whatsapp.sendMessage(mobile, `Best regards,\nTeam ${companyName}`);
+    let ctx = user.lastSearch || {};
 
-      await ChatMessage.create({
-        userId: user._id,
+    /* ---------- INTENT HANDLING ---------- */
+
+    if (intent === 'greeting') {
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: response,
-        timestamp: new Date()
-      });
+        `Hi ${user.name}, what kind of property are you looking for?`
+      );
       return;
     }
 
-    // 2. INTENT DETECTION (GREETING & IDENTITY)
-    const greetings = ['hello', 'hi', 'hy', 'hey', 'namaste', 'hlo', 'greet', 'good morning', 'good evening', 'hii'];
-    const identityQueries = ['who are you', 'your name', 'who is this', 'what are you', 'what do you do', 'company name'];
-
-    const isGreeting = greetings.some(g => lowerText.startsWith(g)) && lowerText.split(' ').length <= 2;
-    const isIdentity = identityQueries.some(iq => lowerText.includes(iq));
-
-    if (isGreeting) {
-      const response = `Hi ${user.name}! Welcome to ${companyName}. How can I help you find your dream property today?\n\nBest regards,\nTeam ${companyName}`;
-      await whatsapp.sendMessage(mobile, `Hi ${user.name}! Welcome to ${companyName}. How can I help you find your dream property today?`);
-      await whatsapp.sendMessage(mobile, `Best regards,\nTeam ${companyName}`);
-
-      await ChatMessage.create({
-        userId: user._id,
+    if (intent === 'identity') {
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: response,
-        timestamp: new Date()
-      });
+        `I'm your property consultant. I help you find the right property based on your needs.`
+      );
       return;
     }
 
-    if (isIdentity) {
-      const response = `I am your dedicated Property Consultant here at ${companyName}. I can help you find premium residential and commercial properties in the region.\n\nBest regards,\nTeam ${companyName}`;
-      await whatsapp.sendMessage(mobile, `I am your dedicated Property Consultant here at ${companyName}. I can help you find premium residential and commercial properties in the region.`);
-      await whatsapp.sendMessage(mobile, `Best regards,\nTeam ${companyName}`);
-
-      await ChatMessage.create({
-        userId: user._id,
+    if (intent === 'negative') {
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: response,
-        timestamp: new Date()
-      });
+        `No problem 😊 If you need anything later, just let me know.`
+      );
       return;
     }
 
-    // 3. SEARCH LOGIC (Refined to prevent false positives)
-    const categories = ['plot', 'villa', 'house', 'shop', 'office', 'flat', 'apartment', 'commercial', 'residential', 'industrial', 'bhk', 'sqft'];
-    const stopwords = ['any', 'available', 'show', 'me', 'some', 'the', 'want', 'looking', 'for', 'have', 'you', 'can', 'find', 'details', 'of', 'property', 'share', 'give', 'tell', 'about', 'is', 'there', 'again', 'images', 'its', 'who', 'are', 'what', 'where', 'how', 'help'];
-
-    const detectedCategory = categories.find(cat => lowerText.includes(cat));
-    const keywords = text.split(' ').filter(k => {
-      const cleanK = k.toLowerCase().replace(/[?!.,]/g, '');
-      return cleanK.length > 2 && !categories.includes(cleanK) && !greetings.includes(cleanK) && !stopwords.includes(cleanK);
-    });
-
-    const isSearch = !!(detectedCategory || keywords.length > 0);
-
-    if (!isSearch) {
-      // Fallback to AI for non-search conversation
-      const chatPrompt = `You are a professional Real Estate Consultant for ${companyName}. User is asking: "${text}". Give a short, helpful response (max 30 words). No placeholders.`;
-      const aiResponse = await ollama.getChatResponse({
-        model: 'qwen2.5:3b',
-        messages: [{ role: 'system', content: "Short professional real estate assistant." }, { role: 'user', content: chatPrompt }],
-        stream: false
-      });
-      const responseText = aiResponse.message.content.trim();
-      await whatsapp.sendMessage(mobile, responseText);
-      await whatsapp.sendMessage(mobile, `Best regards,\nTeam ${companyName}`);
-
-      // Save to History
-      await ChatMessage.create({
-        userId: user._id,
+    if (intent === 'no') {
+      await whatsapp.sendMessage(
         mobile,
-        message: text,
-        response: responseText,
-        timestamp: new Date()
-      });
+        `No worries 👍 Let me know whenever you need help.`
+      );
       return;
     }
 
-    // 4. PERFORM DATABASE SEARCH
-    const query: any = { status: 1, availability: true };
-    if (detectedCategory) query.category = { $regex: detectedCategory, $options: 'i' };
-    if (keywords.length > 0) {
-      query.$or = keywords.map(k => ({
-        $or: [
-          { title: { $regex: k, $options: 'i' } },
-          { city: { $regex: k, $options: 'i' } },
-          { locality: { $regex: k, $options: 'i' } },
-          { highlights: { $regex: k, $options: 'i' } }
-        ]
-      }));
-    }
-
-    let matches = await Property.find(query).limit(3).lean();
-    if (matches.length === 0 && detectedCategory) {
-      matches = await Property.find({ status: 1, availability: true, category: { $regex: detectedCategory, $options: 'i' } }).limit(3).lean();
-    }
-
-    const formatPrice = (p: any) => {
-      if (p.price) {
-        return `₹${(p.price / 10000000).toFixed(2)} Cr`;
+    if (intent === 'yes') {
+      if (ctx.location) {
+        await whatsapp.sendMessage(
+          mobile,
+          `Great 👍 Showing nearby options for ${ctx.location}`
+        );
+        ctx.location = ''; // remove strict filter
+      } else {
+        await whatsapp.sendMessage(
+          mobile,
+          `Please tell me your preferred location 😊`
+        );
+        return;
       }
-      if (p.minPrice) {
-        const min = p.priceType === 'Cr' ? p.minPrice : (p.minPrice / 100);
-        const max = p.priceType === 'Cr' ? p.maxPrice : (p.maxPrice / 100);
-        return `₹${min.toFixed(2)}-${max.toFixed(2)} Cr`;
-      }
-      return 'Price on Request';
+    }
+
+    /* ---------- ENTITY EXTRACTION ---------- */
+    const extracted = await extractEntities(text);
+
+    ctx = {
+      ...ctx,
+      location: extracted.location || ctx.location,
+      category: extracted.category || ctx.category,
+      area: extracted.area || ctx.area
     };
 
-    // 5. INTRO & PROPERTY DELIVERY
-    const introPrompt = `User wants ${detectedCategory || 'properties'}. Write a 1-sentence professional intro. No closings. Max 15 words.`;
-    const aiIntro = await ollama.getChatResponse({
-      model: 'qwen2.5:3b',
-      messages: [{ role: 'system', content: "Professional real estate intro only." }, { role: 'user', content: introPrompt }],
-      stream: false
-    });
+    await BotUser.updateOne(
+      { _id: user._id },
+      { lastSearch: ctx }
+    );
 
-    const introText = aiIntro.message.content.trim();
-    await whatsapp.sendMessage(mobile, introText);
+    /* ---------- SEARCH ---------- */
+    if (intent === 'search' || ctx.location || ctx.category) {
+      const query = buildQuery(ctx);
+      const matches = await Property.find(query).limit(3).lean();
 
-    let propertyResponses = [];
-    if (matches.length > 0) {
-      for (const p of matches) {
-        const block = `🏢 *${p.title}*\n📍 ${p.locality}, ${p.city}\n💰 *${formatPrice(p)}*\n📐 ${p.area ? p.area + ' sqft' : 'N/A'} | ${p.category}\n\n🔗 View Full Details:\nhttps://admin.desiproperty.cloud/p/${p._id}?v=${Date.now()}&uid=${user._id}`;
-        propertyResponses.push(block);
-
-        await whatsapp.sendMessage(mobile, block);
-
-        await new Promise(resolve => setTimeout(resolve, 1500));
+      if (!matches.length) {
+        if (ctx.location) {
+          await whatsapp.sendMessage(
+            mobile,
+            `I couldn’t find properties in ${ctx.location} 😕\n\nWould you like nearby areas or another city?`
+          );
+        } else {
+          await whatsapp.sendMessage(
+            mobile,
+            `I couldn’t find exact matches.\n\nTry sharing location or budget 😊`
+          );
+        }
+        return;
       }
+
+      const intro = ctx.location
+        ? `Here are some options in ${ctx.location}:`
+        : `Here are some properties you might like:`;
+
+      await whatsapp.sendMessage(mobile, intro);
+
+      for (const p of matches) {
+        const msg = `🏢 ${p.title}
+📍 ${p.locality}, ${p.city}
+💰 ${p.price ? '₹' + p.price : 'Price on request'}
+📐 ${p.area || 'N/A'} sqft
+
+🔗 https://admin.desiproperty.cloud/p/${p._id}?uid=${user._id}`;
+
+        await whatsapp.sendMessage(mobile, msg);
+      }
+
+      await whatsapp.sendMessage(
+        mobile,
+        `Want me to refine based on budget or property type?`
+      );
     } else {
-      const fallbackMsg = "I couldn't find an exact match right now. Our team will contact you with more exclusive options shortly.";
-      propertyResponses.push(fallbackMsg);
-      await whatsapp.sendMessage(mobile, fallbackMsg);
+      /* ---------- FALLBACK ---------- */
+      await whatsapp.sendMessage(
+        mobile,
+        `I can help you find properties.\n\nJust tell me location, budget, or type 😊`
+      );
     }
 
-    const finalMsg = `Best regards,\nTeam ${companyName}`;
-    await whatsapp.sendMessage(mobile, finalMsg);
-
-    // Save Search Result to History
+    /* ---------- SAVE CHAT ---------- */
     await ChatMessage.create({
       userId: user._id,
       mobile,
       message: text,
-      response: [introText, ...propertyResponses, finalMsg].join('\n\n'),
+      response: "Processed",
       timestamp: new Date()
     });
 
   } catch (error) {
-    console.error('[Chatbot] Global Error:', error);
-    const errorMsg = "I'm experiencing a temporary delay. Our agent will assist you manually in a moment.";
-    await whatsapp.sendMessage(mobile, errorMsg);
+    console.error(error);
 
-    // Log the failure so the admin sees what happened
-    try {
-      const db = await connectDB();
-      const user = await BotUser.findOne({ mobile });
-      if (user) {
-        await ChatMessage.create({
-          userId: user._id,
-          mobile,
-          message: text,
-          response: `[Bot Error] ${errorMsg}`,
-          timestamp: new Date()
-        });
-      }
-    } catch (logError) {
-      console.error('Failed to log chatbot error:', logError);
-    }
+    await whatsapp.sendMessage(
+      mobile,
+      "Something went wrong. Please try again."
+    );
   }
 }
