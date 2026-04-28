@@ -152,14 +152,23 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       updates.videoLink = updates.videoTourLink;
       delete updates.videoTourLink;
     }
+
     if (updates.images !== undefined) {
-      updates.images = Array.isArray(updates.images) ? updates.images.slice(0, 10) : [];
+      updates.images = Array.isArray(updates.images)
+        ? updates.images.filter(Boolean).slice(0, 10)
+        : undefined;
     }
+
     if (updates.videos !== undefined) {
-      updates.videos = Array.isArray(updates.videos) ? updates.videos.slice(0, 5) : [];
+      updates.videos = Array.isArray(updates.videos)
+        ? updates.videos.filter(Boolean).slice(0, 5)
+        : undefined;
     }
+
     if (updates.documents !== undefined) {
-      updates.documents = Array.isArray(updates.documents) ? updates.documents.slice(0, 10) : [];
+      updates.documents = Array.isArray(updates.documents)
+        ? updates.documents.filter(Boolean).slice(0, 10)
+        : undefined;
     }
 
     // Prevent invalid updates
@@ -167,6 +176,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     forbidden.forEach((key) => delete updates[key]);
 
     const updated = await Property.findByIdAndUpdate(id, updates, { new: true });
+
+    console.log("UPDATE PAYLOAD:", updates);
 
     if (!updated) {
       return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
