@@ -9,6 +9,7 @@ import {
   Video, FileText
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import DashboardHeader from '@/components/DashboardHeader';
 import { toast } from 'react-hot-toast';
 
 export default function PropertyDetailPage() {
@@ -17,9 +18,11 @@ export default function PropertyDetailPage() {
   const propertyId = params?.id as string;
 
   const [selectedProperty, setSelectedProperty] = useState<any>(null);
+  const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const fetchFired = React.useRef<string>('');
 
   useEffect(() => {
     if (!propertyId) return;
@@ -27,24 +30,47 @@ export default function PropertyDetailPage() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/properties/${propertyId}`);
+        // Phase 1: Fast load
+        const res = await fetch(`/api/properties/${propertyId}?preview=true`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to fetch property');
-        if (mounted) setSelectedProperty(data.property);
+        if (mounted) {
+          setSelectedProperty(data.property);
+          setAgent(data.agent);
+          setLoading(false); // fast load complete
+
+          // Background load for full massive media arrays
+          fetch(`/api/properties/${propertyId}`).then(r => r.json()).then(fullData => {
+            if (mounted && fullData.property) {
+              setSelectedProperty((prev: any) => ({
+                ...prev,
+                images: fullData.property.images,
+                videos: fullData.property.videos,
+                documents: fullData.property.documents
+              }));
+            }
+          }).catch(console.error);
+        }
       } catch (err: any) {
-        if (mounted) setError(err.message);
-      } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       }
     })();
     return () => { mounted = false; };
   }, [propertyId]);
 
-  const detailImages = useMemo(() => {
+  const mediaItems = useMemo(() => {
     if (!selectedProperty) return [];
-    return (selectedProperty.images && selectedProperty.images.length > 0)
-      ? selectedProperty.images
-      : [];
+    const items = [];
+    if (selectedProperty.images && selectedProperty.images.length > 0) {
+      items.push(...selectedProperty.images.map((url: string) => ({ type: 'image', url })));
+    }
+    if (selectedProperty.videos && selectedProperty.videos.length > 0) {
+      items.push(...selectedProperty.videos.map((url: string) => ({ type: 'video', url })));
+    }
+    return items;
   }, [selectedProperty]);
 
   const handleUpdateProperty = async (updates: any) => {
@@ -70,6 +96,7 @@ export default function PropertyDetailPage() {
   if (loading) {
     return (
       <DashboardLayout>
+        <DashboardHeader title="Property Details" />
         <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header - Always visible */}
@@ -101,6 +128,7 @@ export default function PropertyDetailPage() {
   if (error || !selectedProperty) {
     return (
       <DashboardLayout>
+        <DashboardHeader title="Property Details" />
         <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header - Always visible */}
@@ -140,6 +168,7 @@ export default function PropertyDetailPage() {
 
   return (
     <DashboardLayout>
+      <DashboardHeader title="Property Details" />
       <main className="flex-1 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -194,24 +223,37 @@ export default function PropertyDetailPage() {
                 {/* Media Gallery */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 space-y-4">
                   <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Media Gallery</h3>
-                  {detailImages.length > 0 ? (
+                  {mediaItems.length > 0 ? (
                     <div className="space-y-3">
-                      <div className="h-96 w-full rounded-xl overflow-hidden bg-gray-50">
-                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={detailImages[selectedImageIndex] || detailImages[0]} alt={selectedProperty.title} className="w-full h-full object-cover" />
+                      <div className="h-96 w-full rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center relative">
+                        {mediaItems[selectedImageIndex]?.type === 'video' ? (
+                          <video src={mediaItems[selectedImageIndex].url} controls className="w-full h-full object-cover" />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={mediaItems[selectedImageIndex]?.url} alt={selectedProperty.title} className="w-full h-full object-cover" />
+                        )}
                       </div>
-                      {detailImages.length > 1 && (
+                      {mediaItems.length > 1 && (
                         <div className="flex flex-wrap items-center gap-3">
-                          {detailImages.map((img: string, idx: number) => (
+                          {mediaItems.map((item: any, idx: number) => (
                             <button
                               key={idx}
                               onClick={() => setSelectedImageIndex(idx)}
-                              className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 ease-in-out cursor-pointer ${
+                              className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all duration-200 ease-in-out cursor-pointer ${
                                 selectedImageIndex === idx ? 'border-indigo-600 shadow-md scale-105 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'
                               }`}
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={img} alt={`${selectedProperty.title} ${idx + 1}`} className="w-full h-full object-cover" />
+                              {item.type === 'video' ? (
+                                <>
+                                  <video src={item.url} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                    <Video size={20} className="text-white drop-shadow-md" />
+                                  </div>
+                                </>
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={item.url} alt={`${selectedProperty.title} ${idx + 1}`} className="w-full h-full object-cover" />
+                              )}
                             </button>
                           ))}
                         </div>
@@ -220,49 +262,29 @@ export default function PropertyDetailPage() {
                   ) : (
                     <div className="w-full h-64 flex flex-col items-center justify-center text-gray-300 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                       <div className="flex flex-col items-center justify-center">
-                        <span className="text-sm font-medium mt-2">No Images Available</span>
+                        <span className="text-sm font-medium mt-2">No Media Available</span>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Video Section */}
-                {(selectedProperty.videos && selectedProperty.videos.length > 0) || selectedProperty.videoLink ? (
+                {/* Video Tour Links */}
+                {selectedProperty.videoLink ? (
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-6 space-y-4">
-                    <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">Video Tour</h3>
+                    <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">External Video Tour</h3>
                     <div className="space-y-4">
-                      {selectedProperty.videoLink && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-gray-700">Video Link</p>
-                          <a
-                            href={selectedProperty.videoLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                          >
-                            <Video size={16} />
-                            Watch Video Tour
-                          </a>
-                        </div>
-                      )}
-                      {selectedProperty.videos && selectedProperty.videos.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-gray-700">Uploaded Videos</p>
-                          <div className="grid grid-cols-1 gap-3">
-                            {selectedProperty.videos.map((videoUrl: string, idx: number) => (
-                              <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
-                                <video
-                                  controls
-                                  className="w-full h-48 object-cover"
-                                  src={videoUrl}
-                                >
-                                  Your browser does not support the video tag.
-                                </video>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Video Link</p>
+                        <a
+                          href={selectedProperty.videoLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <Video size={16} />
+                          Watch Video Tour
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -402,6 +424,19 @@ export default function PropertyDetailPage() {
                       <div>
                         <p className="text-xs font-bold text-gray-400 uppercase">Created By</p>
                         <p className="font-semibold text-gray-800">Admin</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Assigned Agent</p>
+                        {agent ? (
+                          <div className="mt-1">
+                            <p className="font-semibold text-gray-800 flex items-center gap-2">
+                              <Users size={14} className="text-indigo-500" />
+                              {agent.name}<span className="text-xs text-gray-500 font-medium ml-5">- {agent.role}</span></p>
+                       
+                          </div>
+                        ) : (
+                          <p className="font-semibold text-gray-400 italic mt-1 text-sm">Unassigned</p>
+                        )}
                       </div>
                     </div>
                  </div>

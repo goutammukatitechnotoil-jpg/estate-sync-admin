@@ -20,8 +20,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const closeSidebar = () => setSidebarOpen(false);
 
+  const fetchFired = React.useRef(false);
+
   useEffect(() => {
+    if (fetchFired.current) return;
     const fetchUser = async () => {
+      fetchFired.current = true;
       try {
         const response = await fetch('/api/auth/me', {
           credentials: 'include'

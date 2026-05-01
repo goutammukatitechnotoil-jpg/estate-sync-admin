@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -30,8 +31,10 @@ import {
   Briefcase,
   Compass,
   Home as HomeIcon,
-  PlayCircle 
+  PlayCircle,
+  X
 } from 'lucide-react';
+import MeetingModal from '../../../components/Public/MeetingModal';
 
 interface Property {
   _id: any;
@@ -85,6 +88,10 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   const [activeImage, setActiveImage] = useState(0);
   const [relatedProperties, setRelatedProperties] = useState<Property[]>([]);
   const [showMoreDesc, setShowMoreDesc] = useState(false);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  
+  const searchParams = useSearchParams();
+  const botUserId = searchParams.get('uid');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -433,6 +440,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 </div>
 
                 <button
+                  onClick={() => setIsMeetingModalOpen(true)}
                   className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl mb-3 mt-8"
                 >
                   <Calendar className="w-5 h-5 inline mr-2" />
@@ -443,11 +451,11 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 <button className="w-full bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-semibold hover:bg-purple-50 transition-all">
                   {/* <MessageSquare size={18} /> */}
                   <a
-                  href="https://wa.me/918264449563?text=Hi, I need assistance"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1"
-                >Talk to Agent</a>
+                    href="https://wa.me/918264449563?text=Hi, I need assistance"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1"
+                  >Talk to Agent</a>
                 </button>
 
                 <div className="pt-10 border-t border-slate-50 space-y-6 mt-8">
@@ -478,20 +486,33 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
       {/* Mobile Sticky CTA */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-gray-100 p-4 z-50 flex gap-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-        <button className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-black text-sm shadow-lg shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all">
+        <button 
+          onClick={() => setIsMeetingModalOpen(true)}
+          className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-xl font-black text-sm shadow-lg shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all"
+        >
           <Calendar size={18} /> Schedule Meeting
         </button>
         {/* WhatsApp Chat */}
         <button className="flex-1 bg-white border-2 border-purple-600 text-purple-600 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
           {/* <MessageSquare size={18} /> */}
           <a
-          href="https://wa.me/918264449563?text=Hi, I need assistance"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1"
-        >Talk to Agent</a>
+            href="https://wa.me/918264449563?text=Hi, I need assistance"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1"
+          >Talk to Agent</a>
         </button>
       </div>
+
+      {property && (
+        <MeetingModal 
+          isOpen={isMeetingModalOpen}
+          onClose={() => setIsMeetingModalOpen(false)}
+          propertyId={property._id}
+          propertyTitle={property.title}
+          botUserId={botUserId || undefined}
+        />
+      )}
     </div>
   );
 }

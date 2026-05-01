@@ -18,7 +18,9 @@ import {
   ExternalLink,
   Filter,
   TrendingUp,
-  Users
+  Users,
+  Building,
+  Home
 } from 'lucide-react';
 
 interface Appointment {
@@ -56,6 +58,7 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   
   useEffect(() => {
     fetch('/api/admin/appointments')
@@ -289,7 +292,9 @@ export default function AppointmentsPage() {
                           </span>
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium">
-                          <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200">
+                          <button 
+                            onClick={() => setSelectedAppointment(app)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200">
                             <ExternalLink size={14} /> View
                           </button>
                         </td>
@@ -302,6 +307,156 @@ export default function AppointmentsPage() {
           </div>
         </div>
       </main>
+
+      {selectedAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-lg font-bold text-gray-900">Appointment Details</h3>
+              <button 
+                onClick={() => setSelectedAppointment(null)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              
+              <div className={`p-4 rounded-xl flex items-center justify-between border ${getStatusStyle(selectedAppointment.status)} bg-opacity-10`}>
+                <div className="flex items-center gap-3">
+                   {selectedAppointment.status === 'Completed' ? <CheckCircle2 className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
+                   <div>
+                     <p className="text-sm font-bold uppercase tracking-wider">{selectedAppointment.status}</p>
+                     <p className="text-xs opacity-80">
+                       Scheduled for {new Date(selectedAppointment.preferredDate).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {selectedAppointment.preferredTime}
+                     </p>
+                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <User size={14} /> Client Information
+                  </h4>
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4">
+                    <div className="flex justify-between items-start gap-4">
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Full Name</p>
+                        <p className="font-bold text-gray-900">{selectedAppointment.botUserId?.name || selectedAppointment.fullName}</p>
+                      </div>
+                      {selectedAppointment.botUserId?.leadStatus && (
+                        <span className="inline-flex px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-lg border border-indigo-200 whitespace-nowrap">
+                          {selectedAppointment.botUserId.leadStatus}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Phone Number</p>
+                      <p className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Phone size={14} className="text-gray-400" /> {selectedAppointment.botUserId?.mobile || selectedAppointment.phone}
+                      </p>
+                    </div>
+                    {/* {selectedAppointment.email && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Email Address</p>
+                        <p className="font-semibold text-gray-900 flex items-center gap-2">
+                          <Mail size={14} className="text-gray-400" /> {selectedAppointment.email}
+                        </p>
+                      </div>
+                    )} */}
+                    {selectedAppointment.message && (
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Message</p>
+                        <p className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 italic shadow-sm">
+                          "{selectedAppointment.message}"
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <Building size={14} /> Interested Property
+                  </h4>
+                  {selectedAppointment.propertyId ? (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm group">
+                      <div className="h-32 bg-gray-100 relative">
+                        {selectedAppointment.propertyId.images?.[0] ? (
+                          <img src={selectedAppointment.propertyId.images[0]} alt="Property" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+                            <Home size={24} className="mb-2" />
+                            <span className="text-xs font-bold uppercase tracking-wider">No Preview</span>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-[10px] font-black text-indigo-700 shadow-sm border border-white/50 uppercase tracking-widest">
+                          ₹{(selectedAppointment.propertyId.price / 10000000).toFixed(2)} Cr
+                        </div>
+                      </div>
+                      <div className="p-4 bg-gray-50/50">
+                        <p className="font-bold text-gray-900 line-clamp-1">{selectedAppointment.propertyId.title}</p>
+                        <p className="text-xs font-semibold text-gray-500 flex items-center gap-1 mt-2">
+                          <MapPin size={12} className="text-gray-400" /> {selectedAppointment.propertyId.locality}, {selectedAppointment.propertyId.city}
+                        </p>
+                        <a 
+                          href={`/properties/${selectedAppointment.propertyId._id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-4 inline-flex items-center justify-center w-full gap-2 px-3 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-100"
+                        >
+                          View Full Property <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 p-6 rounded-xl border border-dashed border-gray-200 text-center flex flex-col items-center justify-center h-full min-h-[200px]">
+                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-2 shadow-sm border border-gray-100">
+                         <Home size={16} className="text-gray-400" />
+                      </div>
+                      <p className="text-sm font-bold text-gray-500">No property attached</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-6 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-4">
+                  <Users size={14} /> Assigned Property Agent
+                </h4>
+                {selectedAppointment.agent ? (
+                  <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-lg font-bold text-emerald-700 shadow-sm border border-emerald-200">
+                      {selectedAppointment.agent.fullName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-emerald-900">{selectedAppointment.agent.fullName}</p>
+                      <p className="text-xs font-medium text-emerald-600 mt-0.5 flex items-center gap-1">
+                        <Phone size={12} /> {selectedAppointment.agent.mobile}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-sm font-medium text-gray-500 min-h-[80px]">
+                    No agent assigned for this property yet
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setSelectedAppointment(null)}
+                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 hover:shadow-sm transition-all active:scale-95"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

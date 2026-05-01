@@ -17,7 +17,10 @@ export async function GET() {
 
     // Fetch all meetings and populate property and bot user details
     const appointments = await MeetingRequest.find()
-      .populate('propertyId', 'title locality city images price assignedAgentId')
+      .populate({
+        path: 'propertyId',
+        select: { title: 1, locality: 1, city: 1, price: 1, assignedAgentId: 1, images: { $slice: 1 } }
+      })
       .populate('botUserId', 'name mobile leadStatus')
       .sort({ createdAt: -1 })
       .lean();

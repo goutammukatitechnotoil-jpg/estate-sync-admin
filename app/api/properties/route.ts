@@ -84,8 +84,14 @@ export async function POST(req: Request) {
     };
 
     const created = await Property.create(propertyData);
+    
+    // To prevent huge payload in response, we strip base64 arrays
+    const createdObj = created.toObject ? created.toObject() : JSON.parse(JSON.stringify(created));
+    delete createdObj.images;
+    delete createdObj.videos;
+    delete createdObj.documents;
 
-    return NextResponse.json({ message: 'Property added successfully.', property: created }, { status: 201 });
+    return NextResponse.json({ message: 'Property added successfully.', property: createdObj }, { status: 201 });
   } catch (err: any) {
     console.error('Create property error:', err);
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
@@ -113,8 +119,8 @@ export async function GET() {
         locality: 1,
         availability: 1,
         highlights: 1,
-        images: { $slice: 1 },
-        assignedAgentId: 1
+        assignedAgentId: 1,
+        images: { $slice: 1 }
       }
     ).sort({ createdAt: -1 }).lean();
     

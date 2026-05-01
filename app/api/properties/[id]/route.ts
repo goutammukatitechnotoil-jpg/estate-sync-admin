@@ -57,7 +57,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const _Role = Role;
     const _Category = Category;
 
-    const property = await Property.findById(id).lean();
+    const { searchParams } = new URL(req.url);
+    const isPreview = searchParams.get('preview') === 'true';
+
+    // If preview is requested, dramatically cut down payload size by explicitly including scalar fields and slicing images to 1
+    const projection: Record<string, any> = isPreview 
+      ? { 
+          title: 1, category: 1, listingPurpose: 1, pricingType: 1, price: 1, minPrice: 1, maxPrice: 1, 
+          priceType: 1, city: 1, locality: 1, highlights: 1, amenities: 1, availability: 1, bhkType: 1, 
+          propertyFloorNumber: 1, totalFloorsInBuilding: 1, bedrooms: 1, numberOfFloors: 1, plotArea: 1, 
+          commercialType: 1, floorNumber: 1, propertyDescription: 1, address: 1, mapLink: 1, area: 1, 
+          furnishing: 1, propertyAge: 1, facing: 1, videoLink: 1, vastuComplaint: 1, assignedAgentId: 1, 
+          siteVisitAllowed: 1, visitTimings: 1, dynamicData: 1, createdAt: 1, updatedAt: 1, status: 1,
+          images: { $slice: 1 } 
+        } 
+      : {};
+
+    const property = await Property.findById(id).select(projection).lean();
     if (!property) {
       return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
     }
@@ -73,7 +89,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         if (agentData) {
           agent = {
             id: agentData._id,
-            name: agentData.name,
+            name: agentData.fullName || 'Unknown Agent',
             role: agentData.roleId?.name || '',
           };
         }
@@ -84,7 +100,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       category: property.category,
       _id: { $ne: property._id },
       status: 1
-    }).limit(3).lean();
+    })
+    .select({
+      title: 1,
+      category: 1,
+      listingPurpose: 1,
+      price: 1,
+      city: 1,
+      locality: 1,
+      availability: 1
+    })
+    .limit(3)
+    .lean();
 
     let mappedDynamicData = [];
     if (property.dynamicData) {
@@ -175,9 +202,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const forbidden = ['_id', 'createdAt', 'updatedAt'];
     forbidden.forEach((key) => delete updates[key]);
 
-    const updated = await Property.findByIdAndUpdate(id, updates, { new: true });
-
-    console.log("UPDATE PAYLOAD:", updates);
+    const updated = await Property.findByIdAndUpdate(id, updates, { new: true }).select({ images: 0, videos: 0, documents: 0 });
 
     if (!updated) {
       return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
