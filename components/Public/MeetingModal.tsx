@@ -1,4 +1,4 @@
-git 'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { X, Calendar, Clock, Send } from 'lucide-react';
